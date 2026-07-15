@@ -5,7 +5,7 @@ MODE="${1:-run}"
 APP_NAME="PulseBar"
 BUNDLE_ID="com.pulsebar.app"
 MIN_SYSTEM_VERSION="13.0"
-APP_VERSION="1.4.0"
+APP_VERSION="1.4.1"
 BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -62,7 +62,7 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key>
   <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>11</string>
+  <string>12</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>LSUIElement</key>
@@ -75,7 +75,13 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - --identifier "$BUNDLE_ID" "$APP_BUNDLE"
+codesign \
+  --force \
+  --deep \
+  --sign - \
+  --identifier "$BUNDLE_ID" \
+  --requirements "=designated => identifier \"$BUNDLE_ID\"" \
+  "$APP_BUNDLE"
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
