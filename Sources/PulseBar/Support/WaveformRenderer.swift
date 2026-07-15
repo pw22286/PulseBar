@@ -43,23 +43,7 @@ enum WaveformRenderer {
 
             switch shape {
             case .fineSpectrum:
-                let rear = values.indices.map { values[($0 + 13) % values.count] * 0.78 }
-                let middle = values.indices.map { values[($0 + 6) % values.count] * 0.9 }
-                drawFineSpectrum(
-                    in: context,
-                    rect: rect,
-                    values: rear,
-                    color: color.withAlphaComponent(0.18),
-                    anchor: .upward
-                )
-                drawFineSpectrum(
-                    in: context,
-                    rect: rect,
-                    values: middle,
-                    color: color.withAlphaComponent(0.34),
-                    anchor: .upward
-                )
-                drawFineSpectrum(
+                drawLayeredFineSpectrum(
                     in: context,
                     rect: rect,
                     values: values,
@@ -159,7 +143,13 @@ enum WaveformRenderer {
 
             switch shape {
             case .fineSpectrum:
-                drawFineSpectrum(in: context, rect: rect, values: values, color: color, anchor: anchor)
+                drawLayeredFineSpectrum(
+                    in: context,
+                    rect: rect,
+                    values: values,
+                    color: color,
+                    anchor: anchor
+                )
             case .waveLines:
                 drawWaveLines(in: context, rect: rect, values: values, color: color, anchor: anchor)
             case .softSpectrum:
@@ -179,7 +169,7 @@ enum WaveformRenderer {
         case .fineSpectrum: return compact ? 19 : 61
         case .waveLines: return compact ? 19 : 45
         case .softSpectrum: return compact ? 15 : 49
-        case .mountains: return compact ? 17 : 41
+        case .mountains: return compact ? 11 : 21
         }
     }
 
@@ -236,6 +226,44 @@ enum WaveformRenderer {
         }
     }
 
+    private static func drawLayeredFineSpectrum(
+        in context: CGContext,
+        rect: CGRect,
+        values: [CGFloat],
+        color: NSColor,
+        anchor: WaveformAnchor
+    ) {
+        let rearShift = max(2, values.count / 5)
+        let middleShift = max(1, values.count / 10)
+        let rear = values.indices.map {
+            values[($0 + rearShift) % values.count] * 0.72
+        }
+        let middle = values.indices.map {
+            values[($0 + middleShift) % values.count] * 0.86
+        }
+        drawFineSpectrum(
+            in: context,
+            rect: rect,
+            values: rear,
+            color: color.withAlphaComponent(color.alphaComponent * 0.22),
+            anchor: anchor
+        )
+        drawFineSpectrum(
+            in: context,
+            rect: rect,
+            values: middle,
+            color: color.withAlphaComponent(color.alphaComponent * 0.42),
+            anchor: anchor
+        )
+        drawFineSpectrum(
+            in: context,
+            rect: rect,
+            values: values,
+            color: color,
+            anchor: anchor
+        )
+    }
+
     private static func drawWaveLines(
         in context: CGContext,
         rect: CGRect,
@@ -244,11 +272,12 @@ enum WaveformRenderer {
         anchor: WaveformAnchor
     ) {
         let average = values.reduce(0, +) / CGFloat(values.count)
-        let alphas: [CGFloat] = [0.34, 0.58, 0.9]
+        let alphas: [CGFloat] = [0.34, 0.9, 0.5]
 
-        for layer in 0..<3 {
+        let offsets = [-max(1, values.count / 10), 0, max(1, values.count / 10)]
+        for layer in offsets.indices {
             let shifted = values.indices.map { index in
-                values[(index + layer * 4) % values.count]
+                values[min(values.count - 1, max(0, index + offsets[layer]))]
             }
             let points = shifted.enumerated().map { index, value in
                 CGPoint(
@@ -320,11 +349,16 @@ enum WaveformRenderer {
         color: NSColor,
         anchor: WaveformAnchor
     ) {
-        let alphas: [CGFloat] = [0.18, 0.28, 0.42]
-        for layer in 0..<3 {
-            let shifted = values.indices.map { index in
-                let source = (index + layer * 5) % values.count
-                return min(1, values[source] * (1 - CGFloat(layer) * 0.12))
+        let base = spatialAverage(values, radius: values.count < 15 ? 1 : 2)
+        let shift = max(1, values.count / 7)
+        let offsets = [-shift, shift, 0]
+        let scales: [CGFloat] = [0.74, 0.84, 1]
+        let alphas: [CGFloat] = [0.16, 0.26, 0.44]
+
+        for layer in offsets.indices {
+            let shifted = base.indices.map { index in
+                let source = min(base.count - 1, max(0, index + offsets[layer]))
+                return min(1, base[source] * scales[layer])
             }
             let path = mountainPath(values: shifted, rect: rect, anchor: anchor)
             context.addPath(path)
@@ -332,6 +366,15 @@ enum WaveformRenderer {
                 color.withAlphaComponent(color.alphaComponent * alphas[layer]).cgColor
             )
             context.fillPath()
+        }
+    }
+
+    private static func spatialAverage(_ values: [CGFloat], radius: Int) -> [CGFloat] {
+        values.indices.map { index in
+            let lower = max(0, index - radius)
+            let upper = min(values.count - 1, index + radius)
+            let sum = values[lower...upper].reduce(0, +)
+            return sum / CGFloat(upper - lower + 1)
         }
     }
 
@@ -390,7 +433,8 @@ enum WaveformRenderer {
                     y: rect.midY - value * rect.height * 0.46
                 )
             }
-            path.addPath(smoothPath(upper))
+            path.move(to: upper[0])
+            path.addLines(between: Array(upper.dropFirst()))
             path.addLines(between: lower)
             path.closeSubpath()
             return path
@@ -406,8 +450,7 @@ enum WaveformRenderer {
             )
         }
         path.move(to: CGPoint(x: rect.minX, y: baseline))
-        path.addLine(to: points[0])
-        path.addPath(smoothPath(points))
+        path.addLines(between: points)
         path.addLine(to: CGPoint(x: rect.maxX, y: baseline))
         path.closeSubpath()
         return path
