@@ -24,7 +24,11 @@ enum WaveformRenderer {
 
     @MainActor
     static func statusImage(levels: [CGFloat], preferences: WaveformPreferences) -> NSImage {
-        image(size: NSSize(width: 38, height: 18), levels: levels, preferences: preferences)
+        image(
+            size: NSSize(width: preferences.spectrumWidth.points, height: 18),
+            levels: levels,
+            preferences: preferences
+        )
     }
 
     @MainActor
@@ -164,12 +168,19 @@ enum WaveformRenderer {
     }
 
     private static func sampleCount(for shape: WaveformShape, width: CGFloat) -> Int {
-        let compact = width < 80
+        if width < 80 {
+            switch shape {
+            case .fineSpectrum, .waveLines: return max(15, Int(width / 2))
+            case .softSpectrum: return max(12, Int(width / 2.5))
+            case .mountains: return max(9, Int(width / 4.5))
+            }
+        }
+
         switch shape {
-        case .fineSpectrum: return compact ? 19 : 61
-        case .waveLines: return compact ? 19 : 45
-        case .softSpectrum: return compact ? 15 : 49
-        case .mountains: return compact ? 11 : 21
+        case .fineSpectrum: return 61
+        case .waveLines: return 45
+        case .softSpectrum: return 49
+        case .mountains: return 21
         }
     }
 

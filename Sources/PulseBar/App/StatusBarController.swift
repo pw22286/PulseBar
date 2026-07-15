@@ -16,6 +16,7 @@ final class StatusBarController: NSObject {
 
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "PulseBar"
+        statusItem.length = preferences.spectrumWidth.points
 
         capture.$levels
             .receive(on: DispatchQueue.main)
@@ -42,6 +43,7 @@ final class StatusBarController: NSObject {
     }
 
     private func updateIcon(_ levels: [CGFloat]) {
+        statusItem.length = preferences.spectrumWidth.points
         statusItem.button?.image = WaveformRenderer.statusImage(
             levels: levels,
             preferences: preferences

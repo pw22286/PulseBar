@@ -58,6 +58,8 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
 
+                    SpectrumWidthSlider(preferences: preferences)
+
                     if preferences.shape == .fineSpectrum || preferences.shape == .softSpectrum {
                         Picker("静音状态", selection: $preferences.idleStyle) {
                             ForEach(WaveformIdleStyle.allCases) { style in
@@ -104,6 +106,49 @@ struct SettingsView: View {
         )
     }
 
+}
+
+private struct SpectrumWidthSlider: View {
+    @ObservedObject var preferences: WaveformPreferences
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("频谱宽度")
+                Spacer()
+                Text(preferences.spectrumWidth.title)
+                    .foregroundStyle(.secondary)
+            }
+
+            Slider(value: selection, in: 0...3, step: 1)
+
+            HStack(spacing: 0) {
+                ForEach(SpectrumWidth.allCases) { width in
+                    Text(width.title)
+                        .font(.caption2)
+                        .foregroundStyle(
+                            preferences.spectrumWidth == width ? .primary : .secondary
+                        )
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("频谱宽度")
+        .accessibilityValue(preferences.spectrumWidth.title)
+    }
+
+    private var selection: Binding<Double> {
+        Binding(
+            get: {
+                Double(SpectrumWidth.allCases.firstIndex(of: preferences.spectrumWidth) ?? 1)
+            },
+            set: { value in
+                let index = min(3, max(0, Int(value.rounded())))
+                preferences.spectrumWidth = SpectrumWidth.allCases[index]
+            }
+        )
+    }
 }
 
 private struct ColorModePicker: View {
