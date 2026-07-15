@@ -106,7 +106,10 @@ final class StatusBarController: NSObject {
             if capture.isCapturing {
                 await capture.stop()
             } else {
-                await capture.start()
+                await capture.start(requestPermission: true)
+                if capture.state == .permissionDenied {
+                    openPrivacySettings()
+                }
             }
         }
     }

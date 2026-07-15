@@ -39,19 +39,24 @@ final class AudioCaptureService: NSObject, ObservableObject {
     var isCapturing: Bool { state == .capturing || state == .starting }
 
     @MainActor
-    func start() async {
+    func start(requestPermission: Bool = false) async {
         guard stream == nil else { return }
 
         state = .starting
         guard CGPreflightScreenCaptureAccess() else {
             logger.info("Screen capture permission is unavailable")
             state = .permissionDenied
-            if !UserDefaults.standard.bool(forKey: permissionRequestKey) {
+            let didRequest = UserDefaults.standard.bool(forKey: permissionRequestKey)
+            if requestPermission || !didRequest {
                 UserDefaults.standard.set(true, forKey: permissionRequestKey)
-                CGRequestScreenCaptureAccess()
+                if CGRequestScreenCaptureAccess() {
+                    UserDefaults.standard.set(false, forKey: permissionRequestKey)
+                    await start()
+                }
             }
             return
         }
+        UserDefaults.standard.set(false, forKey: permissionRequestKey)
 
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(
