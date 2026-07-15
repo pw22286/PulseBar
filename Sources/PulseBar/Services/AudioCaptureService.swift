@@ -25,17 +25,16 @@ final class AudioCaptureService: NSObject, ObservableObject {
         }
     }
 
-    @Published private(set) var levels = Array(repeating: CGFloat(0), count: 15)
+    @Published private(set) var levels = Array(repeating: CGFloat(0), count: 32)
     @Published private(set) var state = State.idle
 
-    private let sensitivity = CGFloat(1)
-    private let smoothing = CGFloat(0.55)
-
     private let sampleQueue = DispatchQueue(label: "com.pulsebar.audio")
+    private let analyzer = SpectrumAnalyzer(bandCount: 32)
     private let permissionRequestKey = "didRequestScreenCapturePermission"
     private let logger = Logger(subsystem: "com.pulsebar.app", category: "AudioCapture")
     private var stream: SCStream?
     private var lastMeterLog = Date.distantPast
+    private var lastPublishTime = Date.distantPast
 
     var isCapturing: Bool { state == .capturing || state == .starting }
 
@@ -94,16 +93,19 @@ final class AudioCaptureService: NSObject, ObservableObject {
         guard let stream else { return }
         try? await stream.stopCapture()
         self.stream = nil
+        analyzer.reset()
         levels = Array(repeating: 0, count: levels.count)
         state = .idle
     }
 
-    private func meterLevel(from sampleBuffer: CMSampleBuffer) -> CGFloat {
+    private func audioSamples(
+        from sampleBuffer: CMSampleBuffer
+    ) -> (samples: [Float], sampleRate: Double)? {
         guard
             let format = CMSampleBufferGetFormatDescription(sampleBuffer),
             let description = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee,
             description.mFormatID == kAudioFormatLinearPCM
-        else { return 0 }
+        else { return nil }
 
         var requiredSize = 0
         var blockBuffer: CMBlockBuffer?
@@ -134,56 +136,62 @@ final class AudioCaptureService: NSObject, ObservableObject {
             blockBufferMemoryAllocator: nil,
             flags: 0,
             blockBufferOut: &blockBuffer
-        ) == noErr else { return 0 }
+        ) == noErr else { return nil }
 
-        var sumOfSquares = 0.0
-        var sampleCount = 0
-        for buffer in UnsafeMutableAudioBufferListPointer(bufferList) {
-            guard let data = buffer.mData else { continue }
-            let byteCount = Int(buffer.mDataByteSize)
+        let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+        let decoded = buffers.map { decodedSamples(from: $0, format: description) }
+            .filter { !$0.isEmpty }
+        guard !decoded.isEmpty else { return nil }
 
-            if description.mBitsPerChannel == 32,
-               description.mFormatFlags & kAudioFormatFlagIsFloat != 0 {
-                let samples = data.assumingMemoryBound(to: Float.self)
-                let count = byteCount / MemoryLayout<Float>.size
-                for index in 0..<count {
-                    let sample = Double(samples[index])
-                    sumOfSquares += sample * sample
+        let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
+        let channelCount = max(1, Int(description.mChannelsPerFrame))
+        let isNonInterleaved = description.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
+        var mono = Array(repeating: Float(0), count: frameCount)
+
+        if isNonInterleaved || decoded.count > 1 {
+            for channel in decoded {
+                for frame in 0..<min(frameCount, channel.count) {
+                    mono[frame] += channel[frame] / Float(decoded.count)
                 }
-                sampleCount += count
-            } else if description.mBitsPerChannel == 16 {
-                let samples = data.assumingMemoryBound(to: Int16.self)
-                let count = byteCount / MemoryLayout<Int16>.size
-                for index in 0..<count {
-                    let sample = Double(samples[index]) / Double(Int16.max)
-                    sumOfSquares += sample * sample
+            }
+        } else {
+            let interleaved = decoded[0]
+            for frame in 0..<frameCount {
+                let offset = frame * channelCount
+                guard offset + channelCount <= interleaved.count else { break }
+                for channel in 0..<channelCount {
+                    mono[frame] += interleaved[offset + channel] / Float(channelCount)
                 }
-                sampleCount += count
-            } else if description.mBitsPerChannel == 32 {
-                let samples = data.assumingMemoryBound(to: Int32.self)
-                let count = byteCount / MemoryLayout<Int32>.size
-                for index in 0..<count {
-                    let sample = Double(samples[index]) / Double(Int32.max)
-                    sumOfSquares += sample * sample
-                }
-                sampleCount += count
             }
         }
 
-        guard sampleCount > 0 else { return 0 }
-        let rms = sqrt(sumOfSquares / Double(sampleCount))
-        let decibels = 20 * log10(max(rms, 0.000_001))
-        return CGFloat(min(1, max(0, (decibels + 50) / 50)))
+        return (mono, description.mSampleRate)
     }
 
-    @MainActor
-    private func append(_ level: CGFloat) {
-        let previous = levels.last ?? 0
-        let adjusted = min(1, level * sensitivity)
-        let decay = 0.3 + smoothing * 0.65
-        let smoothed = max(adjusted, previous * decay)
-        levels.removeFirst()
-        levels.append(smoothed)
+    private func decodedSamples(
+        from buffer: AudioBuffer,
+        format: AudioStreamBasicDescription
+    ) -> [Float] {
+        guard let data = buffer.mData else { return [] }
+        let byteCount = Int(buffer.mDataByteSize)
+
+        if format.mBitsPerChannel == 32,
+           format.mFormatFlags & kAudioFormatFlagIsFloat != 0 {
+            let count = byteCount / MemoryLayout<Float>.size
+            let pointer = data.assumingMemoryBound(to: Float.self)
+            return (0..<count).map { pointer[$0].isFinite ? pointer[$0] : 0 }
+        }
+        if format.mBitsPerChannel == 16 {
+            let count = byteCount / MemoryLayout<Int16>.size
+            let pointer = data.assumingMemoryBound(to: Int16.self)
+            return (0..<count).map { Float(pointer[$0]) / Float(Int16.max) }
+        }
+        if format.mBitsPerChannel == 32 {
+            let count = byteCount / MemoryLayout<Int32>.size
+            let pointer = data.assumingMemoryBound(to: Int32.self)
+            return (0..<count).map { Float(pointer[$0]) / Float(Int32.max) }
+        }
+        return []
     }
 }
 
@@ -194,13 +202,22 @@ extension AudioCaptureService: SCStreamOutput, SCStreamDelegate {
         of outputType: SCStreamOutputType
     ) {
         guard outputType == .audio, sampleBuffer.isValid else { return }
-        let level = meterLevel(from: sampleBuffer)
+        guard let audio = audioSamples(from: sampleBuffer) else { return }
+        guard let spectrum = analyzer.process(
+            samples: audio.samples,
+            sampleRate: audio.sampleRate
+        ) else { return }
+
+        let now = Date()
+        guard now.timeIntervalSince(lastPublishTime) >= 1.0 / 30.0 else { return }
+        lastPublishTime = now
+
         if Date().timeIntervalSince(lastMeterLog) >= 10 {
-            logger.debug("Audio level: \(level, privacy: .public)")
+            logger.debug("Spectrum peak: \(spectrum.max() ?? 0, privacy: .public)")
             lastMeterLog = Date()
         }
         Task { @MainActor [weak self] in
-            self?.append(level)
+            self?.levels = spectrum
         }
     }
 
