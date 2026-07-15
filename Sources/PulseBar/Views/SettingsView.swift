@@ -35,11 +35,16 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    ColorModePicker(preferences: preferences)
+                    Picker("颜色", selection: $preferences.colorMode) {
+                        ForEach(WaveformColorMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
 
                     if preferences.colorMode == .custom {
                         ColorPicker(
-                            "单色",
+                            "单色颜色",
                             selection: customColor,
                             supportsOpacity: false
                         )
@@ -148,49 +153,5 @@ private struct SpectrumWidthSlider: View {
                 preferences.spectrumWidth = SpectrumWidth.allCases[index]
             }
         )
-    }
-}
-
-private struct ColorModePicker: View {
-    @ObservedObject var preferences: WaveformPreferences
-
-    var body: some View {
-        HStack {
-            Text("颜色")
-            Spacer()
-
-            HStack(spacing: 12) {
-                ForEach(WaveformColorMode.allCases) { mode in
-                    Button {
-                        preferences.colorMode = mode
-                    } label: {
-                        swatch(for: mode)
-                            .frame(width: 18, height: 18)
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        preferences.colorMode == mode ? Color.accentColor : .clear,
-                                        lineWidth: 2
-                                    )
-                                    .padding(-4)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .help(mode.title)
-                    .accessibilityLabel(mode.title)
-                }
-            }
-            .padding(.trailing, 4)
-        }
-    }
-
-    @ViewBuilder
-    private func swatch(for mode: WaveformColorMode) -> some View {
-        switch mode {
-        case .system:
-            Circle().fill(.primary)
-        case .custom:
-            Circle().fill(Color(nsColor: preferences.customColor))
-        }
     }
 }

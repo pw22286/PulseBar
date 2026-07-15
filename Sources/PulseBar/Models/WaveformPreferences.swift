@@ -44,7 +44,7 @@ enum WaveformColorMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "跟随系统"
+        case .system: "系统色"
         case .custom: "单色"
         }
     }
@@ -111,7 +111,7 @@ final class WaveformPreferences: ObservableObject {
         static let anchor = "waveform.anchor"
         static let shape = "waveform.shape"
         static let colorMode = "waveform.colorMode"
-        static let customColor = "waveform.customColor"
+        static let customColor = "waveform.singleColor"
         static let flowDirection = "waveform.flowDirection"
         static let idleStyle = "waveform.idleStyle"
         static let spectrumWidth = "waveform.spectrumWidth"
@@ -153,7 +153,7 @@ final class WaveformPreferences: ObservableObject {
         anchor = WaveformAnchor(rawValue: defaults.string(forKey: Key.anchor) ?? "") ?? .centered
         shape = WaveformShape(rawValue: defaults.string(forKey: Key.shape) ?? "") ?? .fineSpectrum
         colorMode = WaveformColorMode(rawValue: defaults.string(forKey: Key.colorMode) ?? "") ?? .system
-        customColorHex = defaults.string(forKey: Key.customColor) ?? "#FF4D67"
+        customColorHex = defaults.string(forKey: Key.customColor) ?? "#FFFFFF"
         flowDirection = WaveformFlowDirection(
             rawValue: defaults.string(forKey: Key.flowDirection) ?? ""
         ) ?? .centerOutward
@@ -166,7 +166,7 @@ final class WaveformPreferences: ObservableObject {
     }
 
     var customColor: NSColor {
-        NSColor(hexRGB: customColorHex) ?? .systemPink
+        NSColor(hexRGB: customColorHex) ?? .white
     }
 
     func setCustomColor(_ color: NSColor) {
