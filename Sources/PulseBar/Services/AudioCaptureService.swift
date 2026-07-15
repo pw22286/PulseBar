@@ -30,7 +30,7 @@ final class AudioCaptureService: NSObject, ObservableObject {
 
     private let sampleQueue = DispatchQueue(label: "com.pulsebar.audio")
     private let analyzer = SpectrumAnalyzer(bandCount: 32)
-    private let permissionRequestKey = "didRequestScreenCapturePermission"
+    private let permissionRequestKey = "didRequestScreenCapturePermission.stableIdentityV1"
     private let logger = Logger(subsystem: "com.pulsebar.app", category: "AudioCapture")
     private var stream: SCStream?
     private var lastMeterLog = Date.distantPast
