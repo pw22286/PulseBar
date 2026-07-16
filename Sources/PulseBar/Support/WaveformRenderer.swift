@@ -372,7 +372,7 @@ enum WaveformRenderer {
             context.setStrokeColor(
                 color.withAlphaComponent(color.alphaComponent * alphas[layer]).cgColor
             )
-            context.setLineWidth(rect.width < 80 ? 1 : 2)
+            context.setLineWidth(rect.width < 120 ? 0.9 : 1.25)
             context.setLineCap(.round)
             context.strokePath()
         }
@@ -427,9 +427,9 @@ enum WaveformRenderer {
     ) {
         let base = spatialAverage(values, radius: values.count < 15 ? 1 : 2)
         let shift = max(1, values.count / 7)
-        let offsets = [-shift, shift, 0]
-        let scales: [CGFloat] = [0.74, 0.84, 1]
-        let alphas: [CGFloat] = [0.16, 0.26, 0.44]
+        let offsets = [-shift, 0]
+        let scales: [CGFloat] = [0.78, 1]
+        let alphas: [CGFloat] = [0.2, 0.48]
 
         for layer in offsets.indices {
             let shifted = base.indices.map { index in
@@ -495,17 +495,20 @@ enum WaveformRenderer {
     ) -> CGPath {
         let path = CGMutablePath()
         guard !values.isEmpty else { return path }
+        var boundedValues = values
+        boundedValues[0] = 0
+        boundedValues[boundedValues.count - 1] = 0
 
         if anchor == .centered {
-            let upper = values.enumerated().map { index, value in
+            let upper = boundedValues.enumerated().map { index, value in
                 CGPoint(
-                    x: xPosition(index: index, count: values.count, rect: rect),
+                    x: xPosition(index: index, count: boundedValues.count, rect: rect),
                     y: rect.midY + value * rect.height * 0.46
                 )
             }
-            let lower = values.enumerated().reversed().map { index, value in
+            let lower = boundedValues.enumerated().reversed().map { index, value in
                 CGPoint(
-                    x: xPosition(index: index, count: values.count, rect: rect),
+                    x: xPosition(index: index, count: boundedValues.count, rect: rect),
                     y: rect.midY - value * rect.height * 0.46
                 )
             }
@@ -517,9 +520,9 @@ enum WaveformRenderer {
         }
 
         let baseline = anchor == .upward ? rect.minY : rect.maxY
-        let points = values.enumerated().map { index, value in
+        let points = boundedValues.enumerated().map { index, value in
             CGPoint(
-                x: xPosition(index: index, count: values.count, rect: rect),
+                x: xPosition(index: index, count: boundedValues.count, rect: rect),
                 y: anchor == .upward
                     ? rect.minY + value * rect.height
                     : rect.maxY - value * rect.height
