@@ -11,9 +11,16 @@ struct SettingsView: View {
             }
 
             Section("外观") {
+                Picker("波形方向", selection: $preferences.orientation) {
+                    ForEach(WaveformOrientation.allCases) { orientation in
+                        Text(orientation.title).tag(orientation)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 Picker("伸展方向", selection: $preferences.anchor) {
                     ForEach(WaveformAnchor.allCases) { anchor in
-                        Text(anchor.title).tag(anchor)
+                        Text(anchor.title(for: preferences.orientation)).tag(anchor)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -33,20 +40,9 @@ struct SettingsView: View {
                     )
                 }
 
-                Picker("扩散方向", selection: $preferences.flowDirection) {
-                    ForEach(WaveformFlowDirection.allCases) { direction in
-                        Label(
-                            direction.title,
-                            systemImage: direction == .rightToLeft
-                                ? "arrow.left"
-                                : "arrow.left.and.right"
-                        )
-                        .tag(direction)
-                    }
+                if preferences.orientation == .vertical {
+                    SpectrumWidthSlider(preferences: preferences)
                 }
-                .pickerStyle(.segmented)
-
-                SpectrumWidthSlider(preferences: preferences)
 
                 if preferences.shape == .fineSpectrum || preferences.shape == .softSpectrum {
                     Picker("静音状态", selection: $preferences.idleStyle) {

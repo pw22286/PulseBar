@@ -1,10 +1,15 @@
 import AppKit
 
 enum WaveformRenderer {
-    static func displayedLevels(
+    private enum SpectrumDistribution {
+        case centerOutward
+        case natural
+    }
+
+    private static func displayedLevels(
         _ levels: [CGFloat],
         count: Int,
-        direction: WaveformFlowDirection
+        distribution: SpectrumDistribution
     ) -> [CGFloat] {
         guard count > 0 else { return [] }
         let history = levels.isEmpty ? [CGFloat(0)] : levels
@@ -12,10 +17,10 @@ enum WaveformRenderer {
         return (0..<count).map { index in
             let position = count == 1 ? 0.5 : CGFloat(index) / CGFloat(count - 1)
             let age: CGFloat
-            switch direction {
+            switch distribution {
             case .centerOutward:
                 age = abs(position - 0.5) * 2
-            case .rightToLeft:
+            case .natural:
                 age = 1 - position
             }
             return interpolatedLevel(in: history, age: age)
@@ -25,7 +30,7 @@ enum WaveformRenderer {
     @MainActor
     static func statusImage(levels: [CGFloat], preferences: WaveformPreferences) -> NSImage {
         image(
-            size: NSSize(width: preferences.spectrumWidth.points, height: 18),
+            size: NSSize(width: preferences.statusItemWidth, height: 18),
             levels: levels,
             preferences: preferences
         )
@@ -38,7 +43,7 @@ enum WaveformRenderer {
         let values = displayedLevels(
             previewLevels(for: shape),
             count: density,
-            direction: .rightToLeft
+            distribution: .natural
         )
 
         return NSImage(size: size, flipped: false) { rect in
@@ -132,40 +137,96 @@ enum WaveformRenderer {
         let color = preferences.colorMode == .system
             ? NSColor.controlAccentColor
             : preferences.customColor
-        let density = sampleCount(for: shape, width: size.width)
-        let values = displayedLevels(levels, count: density, direction: preferences.flowDirection)
+        let density = preferences.orientation == .horizontal
+            ? horizontalSampleCount(for: shape)
+            : sampleCount(for: shape, width: size.width)
+        let values = displayedLevels(
+            levels,
+            count: density,
+            distribution: .centerOutward
+        )
         let anchor = preferences.anchor
         let idleStyle = preferences.idleStyle
+        let orientation = preferences.orientation
 
         let image = NSImage(size: size, flipped: false) { rect in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
             context.setAllowsAntialiasing(true)
 
-            if values.max() ?? 0 < 0.025 {
-                drawIdle(in: context, rect: rect, color: color, style: idleStyle)
-                return true
-            }
-
-            switch shape {
-            case .fineSpectrum:
-                drawLayeredFineSpectrum(
+            if orientation == .horizontal {
+                context.saveGState()
+                context.translateBy(x: rect.midX, y: rect.midY)
+                context.rotate(by: .pi / 2)
+                let rotatedRect = CGRect(
+                    x: -rect.height / 2,
+                    y: -rect.width / 2,
+                    width: rect.height,
+                    height: rect.width
+                )
+                drawWaveform(
+                    in: context,
+                    rect: rotatedRect,
+                    values: values,
+                    shape: shape,
+                    color: color,
+                    anchor: anchor,
+                    idleStyle: idleStyle
+                )
+                context.restoreGState()
+            } else {
+                drawWaveform(
                     in: context,
                     rect: rect,
                     values: values,
+                    shape: shape,
                     color: color,
-                    anchor: anchor
+                    anchor: anchor,
+                    idleStyle: idleStyle
                 )
-            case .waveLines:
-                drawWaveLines(in: context, rect: rect, values: values, color: color, anchor: anchor)
-            case .softSpectrum:
-                drawSoftSpectrum(in: context, rect: rect, values: values, color: color, anchor: anchor)
-            case .mountains:
-                drawMountains(in: context, rect: rect, values: values, color: color, anchor: anchor)
             }
             return true
         }
         image.isTemplate = false
         return image
+    }
+
+    private static func drawWaveform(
+        in context: CGContext,
+        rect: CGRect,
+        values: [CGFloat],
+        shape: WaveformShape,
+        color: NSColor,
+        anchor: WaveformAnchor,
+        idleStyle: WaveformIdleStyle
+    ) {
+        if values.max() ?? 0 < 0.025 {
+            drawIdle(in: context, rect: rect, color: color, style: idleStyle)
+            return
+        }
+
+        switch shape {
+        case .fineSpectrum:
+            drawLayeredFineSpectrum(
+                in: context,
+                rect: rect,
+                values: values,
+                color: color,
+                anchor: anchor
+            )
+        case .waveLines:
+            drawWaveLines(in: context, rect: rect, values: values, color: color, anchor: anchor)
+        case .softSpectrum:
+            drawSoftSpectrum(in: context, rect: rect, values: values, color: color, anchor: anchor)
+        case .mountains:
+            drawMountains(in: context, rect: rect, values: values, color: color, anchor: anchor)
+        }
+    }
+
+    private static func horizontalSampleCount(for shape: WaveformShape) -> Int {
+        switch shape {
+        case .fineSpectrum, .waveLines: return 9
+        case .softSpectrum, .mountains: return 7
+        }
     }
 
     private static func sampleCount(for shape: WaveformShape, width: CGFloat) -> Int {
@@ -192,7 +253,10 @@ enum WaveformRenderer {
         style: WaveformIdleStyle
     ) {
         let count = 9
-        let itemWidth: CGFloat = style == .dots ? min(2.2, rect.height * 0.14) : min(2, rect.height * 0.12)
+        let maximumWidth = rect.width / CGFloat(count) * 0.58
+        let itemWidth: CGFloat = style == .dots
+            ? min(min(2.2, rect.height * 0.14), maximumWidth)
+            : min(min(2, rect.height * 0.12), maximumWidth)
         let itemHeight: CGFloat = style == .dots ? itemWidth : max(4, rect.height * 0.24)
         let spacing = (rect.width - itemWidth * CGFloat(count)) / CGFloat(count - 1)
         context.setFillColor(color.withAlphaComponent(0.72).cgColor)

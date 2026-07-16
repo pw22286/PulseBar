@@ -16,6 +16,15 @@ enum WaveformAnchor: String, CaseIterable, Identifiable {
         case .downward: "向下"
         }
     }
+
+    func title(for orientation: WaveformOrientation) -> String {
+        guard orientation == .horizontal else { return title }
+        switch self {
+        case .upward: return "向左"
+        case .centered: return "居中"
+        case .downward: return "向右"
+        }
+    }
 }
 
 enum WaveformShape: String, CaseIterable, Identifiable {
@@ -50,16 +59,16 @@ enum WaveformColorMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum WaveformFlowDirection: String, CaseIterable, Identifiable {
-    case centerOutward
-    case rightToLeft
+enum WaveformOrientation: String, CaseIterable, Identifiable {
+    case vertical
+    case horizontal
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .centerOutward: "中心向两侧"
-        case .rightToLeft: "右 → 左"
+        case .vertical: "竖向"
+        case .horizontal: "横向"
         }
     }
 }
@@ -112,7 +121,7 @@ final class WaveformPreferences: ObservableObject {
         static let shape = "waveform.shape"
         static let colorMode = "waveform.colorMode"
         static let customColor = "waveform.singleColor"
-        static let flowDirection = "waveform.flowDirection"
+        static let orientation = "waveform.orientation"
         static let idleStyle = "waveform.idleStyle"
         static let spectrumWidth = "waveform.spectrumWidth"
         static let autoListen = "capture.autoListen"
@@ -132,8 +141,8 @@ final class WaveformPreferences: ObservableObject {
     @Published var customColorHex: String {
         didSet { defaults.set(customColorHex, forKey: Key.customColor) }
     }
-    @Published var flowDirection: WaveformFlowDirection {
-        didSet { defaults.set(flowDirection.rawValue, forKey: Key.flowDirection) }
+    @Published var orientation: WaveformOrientation {
+        didSet { defaults.set(orientation.rawValue, forKey: Key.orientation) }
     }
     @Published var idleStyle: WaveformIdleStyle {
         didSet { defaults.set(idleStyle.rawValue, forKey: Key.idleStyle) }
@@ -154,9 +163,9 @@ final class WaveformPreferences: ObservableObject {
         shape = WaveformShape(rawValue: defaults.string(forKey: Key.shape) ?? "") ?? .fineSpectrum
         colorMode = WaveformColorMode(rawValue: defaults.string(forKey: Key.colorMode) ?? "") ?? .system
         customColorHex = defaults.string(forKey: Key.customColor) ?? "#FFFFFF"
-        flowDirection = WaveformFlowDirection(
-            rawValue: defaults.string(forKey: Key.flowDirection) ?? ""
-        ) ?? .centerOutward
+        orientation = WaveformOrientation(
+            rawValue: defaults.string(forKey: Key.orientation) ?? ""
+        ) ?? .vertical
         idleStyle = WaveformIdleStyle(rawValue: defaults.string(forKey: Key.idleStyle) ?? "") ?? .dots
         spectrumWidth = SpectrumWidth(
             rawValue: defaults.string(forKey: Key.spectrumWidth) ?? ""
@@ -167,6 +176,10 @@ final class WaveformPreferences: ObservableObject {
 
     var customColor: NSColor {
         NSColor(hexRGB: customColorHex) ?? .white
+    }
+
+    var statusItemWidth: CGFloat {
+        orientation == .vertical ? spectrumWidth.points : SpectrumWidth.standard.points
     }
 
     func setCustomColor(_ color: NSColor) {

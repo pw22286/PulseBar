@@ -5,7 +5,7 @@ MODE="${1:-run}"
 APP_NAME="PulseBar"
 BUNDLE_ID="com.pulsebar.app"
 MIN_SYSTEM_VERSION="13.0"
-APP_VERSION="1.6.2"
+APP_VERSION="1.7.0"
 BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -62,7 +62,7 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key>
   <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>18</string>
+  <string>19</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>LSUIElement</key>
