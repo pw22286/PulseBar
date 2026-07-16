@@ -339,7 +339,7 @@ enum WaveformRenderer {
         shape: WaveformShape
     ) {
         guard values.max() ?? 0 >= 0.025 else { return }
-        let spacing: CGFloat = shape == .softSpectrum && rect.width < 80 ? 1.1 : (rect.width < 80 ? 1 : 3)
+        let spacing: CGFloat = shape == .softSpectrum && rect.width < 120 ? 1.1 : (rect.width < 120 ? 1 : 3)
         let barWidth = max(
             shape == .softSpectrum ? 1.4 : 1,
             (rect.width - spacing * CGFloat(values.count - 1)) / CGFloat(values.count)
@@ -384,7 +384,7 @@ enum WaveformRenderer {
         color: NSColor,
         anchor: WaveformAnchor
     ) {
-        let spacing: CGFloat = rect.width < 80 ? 1 : 3
+        let spacing: CGFloat = rect.width < 120 ? 1 : 3
         let width = max(1, (rect.width - spacing * CGFloat(values.count - 1)) / CGFloat(values.count))
 
         for (index, value) in values.enumerated() {
@@ -488,13 +488,13 @@ enum WaveformRenderer {
         color: NSColor,
         anchor: WaveformAnchor
     ) {
-        let spacing: CGFloat = rect.width < 80 ? 1.1 : 3
+        let spacing: CGFloat = rect.width < 120 ? 1.1 : 3
         let width = max(1.4, (rect.width - spacing * CGFloat(values.count - 1)) / CGFloat(values.count))
 
         context.saveGState()
         context.setShadow(
             offset: .zero,
-            blur: rect.width < 80 ? 1.5 : 5,
+            blur: rect.width < 120 ? 1.5 : 5,
             color: color.withAlphaComponent(color.alphaComponent * 0.42).cgColor
         )
         for (index, value) in values.enumerated() {
