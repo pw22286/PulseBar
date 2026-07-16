@@ -209,7 +209,7 @@ final class WaveformPreferences: ObservableObject {
     }
 }
 
-private extension NSColor {
+extension NSColor {
     convenience init?(hexRGB: String) {
         let value = hexRGB.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         guard value.count == 6, let rgb = Int(value, radix: 16) else { return nil }

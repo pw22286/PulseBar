@@ -33,11 +33,15 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
 
                 if preferences.colorMode == .custom {
-                    ColorPicker(
-                        "单色颜色",
-                        selection: customColor,
-                        supportsOpacity: false
-                    )
+                    ColorPresetPicker(preferences: preferences)
+
+                    DisclosureGroup("高级设置") {
+                        ColorPicker(
+                            "自定义颜色",
+                            selection: customColor,
+                            supportsOpacity: false
+                        )
+                    }
                 }
 
                 if preferences.orientation == .vertical {
@@ -86,6 +90,63 @@ struct SettingsView: View {
         )
     }
 
+}
+
+private struct ColorPreset: Identifiable {
+    let name: String
+    let hex: String
+
+    var id: String { hex }
+    var color: Color { Color(nsColor: NSColor(hexRGB: hex) ?? .white) }
+}
+
+private struct ColorPresetPicker: View {
+    @ObservedObject var preferences: WaveformPreferences
+
+    private let presets = [
+        ColorPreset(name: "白色", hex: "#FFFFFF"),
+        ColorPreset(name: "雾蓝", hex: "#7F94A8"),
+        ColorPreset(name: "鼠尾草", hex: "#8D9B84"),
+        ColorPreset(name: "灰绿", hex: "#718C83"),
+        ColorPreset(name: "玫瑰灰", hex: "#AE8B8B"),
+        ColorPreset(name: "陶土", hex: "#B07D68"),
+        ColorPreset(name: "麦穗", hex: "#B39B70"),
+        ColorPreset(name: "灰紫", hex: "#938A9E")
+    ]
+
+    var body: some View {
+        LabeledContent("预设颜色") {
+            HStack(spacing: 9) {
+                ForEach(presets) { preset in
+                    Button {
+                        preferences.customColorHex = preset.hex
+                    } label: {
+                        Circle()
+                            .fill(preset.color)
+                            .frame(width: 20, height: 20)
+                            .overlay {
+                                Circle()
+                                    .stroke(Color.primary.opacity(0.18), lineWidth: 1)
+                            }
+                            .overlay {
+                                if preferences.customColorHex == preset.hex {
+                                    Circle()
+                                        .stroke(Color.accentColor, lineWidth: 2)
+                                        .padding(-3)
+                                }
+                            }
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .help(preset.name)
+                    .accessibilityLabel(preset.name)
+                    .accessibilityValue(
+                        preferences.customColorHex == preset.hex ? "已选择" : ""
+                    )
+                }
+            }
+        }
+    }
 }
 
 private struct WaveformStyleGrid: View {
