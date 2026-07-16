@@ -152,30 +152,16 @@ private struct SpectrumWidthSlider: View {
     @ObservedObject var preferences: WaveformPreferences
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("频谱宽度")
-                Spacer()
+        LabeledContent("频谱宽度") {
+            HStack(spacing: 10) {
+                Slider(value: selection, in: 0...3, step: 1)
+                    .frame(minWidth: 150)
+
                 Text(preferences.spectrumWidth.title)
                     .foregroundStyle(.secondary)
-            }
-
-            Slider(value: selection, in: 0...3, step: 1)
-
-            HStack(spacing: 0) {
-                ForEach(SpectrumWidth.allCases) { width in
-                    Text(width.title)
-                        .font(.caption2)
-                        .foregroundStyle(
-                            preferences.spectrumWidth == width ? .primary : .secondary
-                        )
-                        .frame(maxWidth: .infinity)
-                }
+                    .frame(width: 44, alignment: .trailing)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("频谱宽度")
-        .accessibilityValue(preferences.spectrumWidth.title)
     }
 
     private var selection: Binding<Double> {

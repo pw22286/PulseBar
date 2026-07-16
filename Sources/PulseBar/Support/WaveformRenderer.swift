@@ -168,7 +168,7 @@ enum WaveformRenderer {
     }
 
     private static func sampleCount(for shape: WaveformShape, width: CGFloat) -> Int {
-        if width < 80 {
+        if width < 120 {
             switch shape {
             case .fineSpectrum, .waveLines: return max(15, Int(width / 2))
             case .softSpectrum: return max(12, Int(width / 2.5))

@@ -99,8 +99,8 @@ enum SpectrumWidth: String, CaseIterable, Identifiable {
         switch self {
         case .compact: 30
         case .standard: 38
-        case .relaxed: 46
-        case .wide: 56
+        case .relaxed: 69
+        case .wide: 84
         }
     }
 }
