@@ -152,7 +152,7 @@ final class WaveformPreferences: ObservableObject {
         anchor = WaveformAnchor(rawValue: defaults.string(forKey: Key.anchor) ?? "") ?? .centered
         shape = WaveformShape(rawValue: defaults.string(forKey: Key.shape) ?? "") ?? .fineSpectrum
         colorMode = WaveformColorMode(rawValue: defaults.string(forKey: Key.colorMode) ?? "") ?? .system
-        customColorHex = defaults.string(forKey: Key.customColor) ?? "#FFFFFF"
+        customColorHex = defaults.string(forKey: Key.customColor) ?? "#FF3B30"
         orientation = WaveformOrientation(
             rawValue: defaults.string(forKey: Key.orientation) ?? ""
         ) ?? .vertical

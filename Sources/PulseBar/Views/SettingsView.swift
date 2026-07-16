@@ -35,13 +35,11 @@ struct SettingsView: View {
                 if preferences.colorMode == .custom {
                     ColorPresetPicker(preferences: preferences)
 
-                    DisclosureGroup("高级设置") {
-                        ColorPicker(
-                            "自定义颜色",
-                            selection: customColor,
-                            supportsOpacity: false
-                        )
-                    }
+                    ColorPicker(
+                        "高级调色",
+                        selection: customColor,
+                        supportsOpacity: false
+                    )
                 }
 
                 if preferences.orientation == .vertical {
@@ -104,14 +102,13 @@ private struct ColorPresetPicker: View {
     @ObservedObject var preferences: WaveformPreferences
 
     private let presets = [
-        ColorPreset(name: "白色", hex: "#FFFFFF"),
-        ColorPreset(name: "雾蓝", hex: "#7F94A8"),
-        ColorPreset(name: "鼠尾草", hex: "#8D9B84"),
-        ColorPreset(name: "灰绿", hex: "#718C83"),
-        ColorPreset(name: "玫瑰灰", hex: "#AE8B8B"),
-        ColorPreset(name: "陶土", hex: "#B07D68"),
-        ColorPreset(name: "麦穗", hex: "#B39B70"),
-        ColorPreset(name: "灰紫", hex: "#938A9E")
+        ColorPreset(name: "红", hex: "#FF3B30"),
+        ColorPreset(name: "橙", hex: "#FF9500"),
+        ColorPreset(name: "黄", hex: "#FFCC00"),
+        ColorPreset(name: "绿", hex: "#34C759"),
+        ColorPreset(name: "青", hex: "#32ADE6"),
+        ColorPreset(name: "蓝", hex: "#007AFF"),
+        ColorPreset(name: "紫", hex: "#AF52DE")
     ]
 
     var body: some View {
