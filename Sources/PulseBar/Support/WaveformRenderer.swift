@@ -129,8 +129,9 @@ enum WaveformRenderer {
         preferences: WaveformPreferences
     ) -> NSImage {
         let shape = preferences.shape
-        let color = preferences.colorMode == .system ? NSColor.black : preferences.customColor
-        let isTemplate = preferences.colorMode == .system
+        let color = preferences.colorMode == .system
+            ? NSColor.controlAccentColor
+            : preferences.customColor
         let density = sampleCount(for: shape, width: size.width)
         let values = displayedLevels(levels, count: density, direction: preferences.flowDirection)
         let anchor = preferences.anchor
@@ -163,7 +164,7 @@ enum WaveformRenderer {
             }
             return true
         }
-        image.isTemplate = isTemplate
+        image.isTemplate = false
         return image
     }
 

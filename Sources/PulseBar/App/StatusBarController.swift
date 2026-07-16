@@ -37,6 +37,13 @@ final class StatusBarController: NSObject {
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: NSColor.systemColorsDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateIcon(self?.capture.levels ?? [])
+            }
+            .store(in: &cancellables)
+
         if preferences.autoListen {
             Task { await capture.start() }
         }
