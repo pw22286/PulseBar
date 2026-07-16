@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import OSLog
 import ServiceManagement
 
 enum WaveformAnchor: String, CaseIterable, Identifiable {
@@ -118,6 +119,7 @@ final class WaveformPreferences: ObservableObject {
     }
 
     private let defaults: UserDefaults
+    private let logger = Logger(subsystem: "com.pulsebar.app", category: "LoginItem")
 
     @Published var anchor: WaveformAnchor {
         didSet { defaults.set(anchor.rawValue, forKey: Key.anchor) }
@@ -184,16 +186,18 @@ final class WaveformPreferences: ObservableObject {
 
     func setLaunchAtLogin(_ enabled: Bool) {
         loginItemError = nil
+        let service = SMAppService.mainApp
         do {
             if enabled {
-                if SMAppService.mainApp.status == .notRegistered {
-                    try SMAppService.mainApp.register()
+                if service.status != .enabled && service.status != .requiresApproval {
+                    try service.register()
                 }
-            } else if SMAppService.mainApp.status != .notRegistered {
-                try SMAppService.mainApp.unregister()
+            } else if service.status == .enabled || service.status == .requiresApproval {
+                try service.unregister()
             }
         } catch {
             loginItemError = error.localizedDescription
+            logger.error("Login item update failed: \(error.localizedDescription, privacy: .public)")
         }
         refreshLoginItemStatus()
     }
@@ -202,6 +206,9 @@ final class WaveformPreferences: ObservableObject {
         let status = SMAppService.mainApp.status
         launchAtLogin = status == .enabled || status == .requiresApproval
         loginItemNeedsApproval = status == .requiresApproval
+        if status == .notFound && !Bundle.main.bundlePath.hasPrefix("/Applications/") {
+            loginItemError = "请先将 PulseBar 移到“应用程序”文件夹"
+        }
     }
 
     func openLoginItemSettings() {

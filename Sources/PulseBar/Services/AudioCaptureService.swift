@@ -33,6 +33,7 @@ final class AudioCaptureService: NSObject, ObservableObject {
     private let permissionRequestKey = "didRequestScreenCapturePermission.stableIdentityV1"
     private let logger = Logger(subsystem: "com.pulsebar.app", category: "AudioCapture")
     private var stream: SCStream?
+    private var isSilent = true
     private var lastMeterLog = Date.distantPast
     private var lastPublishTime = Date.distantPast
 
@@ -84,6 +85,8 @@ final class AudioCaptureService: NSObject, ObservableObject {
 
             self.stream = stream
             try await stream.startCapture()
+            isSilent = true
+            lastPublishTime = .distantPast
             state = .capturing
             logger.info("System audio capture started")
         } catch {
@@ -99,6 +102,7 @@ final class AudioCaptureService: NSObject, ObservableObject {
         try? await stream.stopCapture()
         self.stream = nil
         analyzer.reset()
+        isSilent = true
         levels = Array(repeating: 0, count: levels.count)
         state = .idle
     }
@@ -208,14 +212,17 @@ extension AudioCaptureService: SCStreamOutput, SCStreamDelegate {
     ) {
         guard outputType == .audio, sampleBuffer.isValid else { return }
         guard let audio = audioSamples(from: sampleBuffer) else { return }
+        let hasSignal = audio.samples.contains { abs($0) > 0.000_05 }
+        let now = Date()
+        let interval = isSilent && !hasSignal ? 1.0 / 8.0 : 1.0 / 30.0
+        guard now.timeIntervalSince(lastPublishTime) >= interval else { return }
+        lastPublishTime = now
+
         guard let spectrum = analyzer.process(
             samples: audio.samples,
             sampleRate: audio.sampleRate
         ) else { return }
-
-        let now = Date()
-        guard now.timeIntervalSince(lastPublishTime) >= 1.0 / 30.0 else { return }
-        lastPublishTime = now
+        isSilent = spectrum.max() ?? 0 < 0.025
 
         if Date().timeIntervalSince(lastMeterLog) >= 10 {
             logger.debug("Spectrum peak: \(spectrum.max() ?? 0, privacy: .public)")

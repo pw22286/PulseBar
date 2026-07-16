@@ -7,6 +7,9 @@ final class StatusBarController: NSObject {
     private let preferences = WaveformPreferences()
     private let statusItem = NSStatusBar.system.statusItem(withLength: 38)
     private var peakLevels: [CGFloat] = []
+    private var shouldListen = false
+    private var reconnectAttempts = 0
+    private var reconnectTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private lazy var settingsWindow = SettingsWindowController(
         preferences: preferences
@@ -14,6 +17,7 @@ final class StatusBarController: NSObject {
 
     override init() {
         super.init()
+        shouldListen = preferences.autoListen
 
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "PulseBar"
@@ -29,12 +33,13 @@ final class StatusBarController: NSObject {
 
         capture.$state
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] state in
                 guard let self else { return }
                 if !capture.isCapturing {
                     peakLevels = Array(repeating: 0, count: capture.levels.count)
                     updateIcon(capture.levels)
                 }
+                handleCaptureState(state)
                 updateMenu()
             }
             .store(in: &cancellables)
@@ -55,7 +60,17 @@ final class StatusBarController: NSObject {
             }
             .store(in: &cancellables)
 
-        if preferences.autoListen {
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.suspendForSleep() }
+            .store(in: &cancellables)
+
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.resumeAfterWake() }
+            .store(in: &cancellables)
+
+        if shouldListen {
             Task { await capture.start() }
         }
     }
@@ -87,7 +102,7 @@ final class StatusBarController: NSObject {
         menu.addItem(status)
 
         let toggle = NSMenuItem(
-            title: capture.isCapturing ? "停止" : "开始",
+            title: shouldListen ? "停止" : "开始",
             action: #selector(toggleCapture),
             keyEquivalent: ""
         )
@@ -102,6 +117,14 @@ final class StatusBarController: NSObject {
         )
         settings.target = self
         menu.addItem(settings)
+
+        let about = NSMenuItem(
+            title: "关于 PulseBar",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        about.target = self
+        menu.addItem(about)
 
         if capture.state == .permissionDenied {
             let permission = NSMenuItem(
@@ -134,9 +157,14 @@ final class StatusBarController: NSObject {
 
     @objc private func toggleCapture() {
         Task {
-            if capture.isCapturing {
+            if shouldListen {
+                shouldListen = false
+                reconnectTask?.cancel()
+                reconnectTask = nil
                 await capture.stop()
             } else {
+                shouldListen = true
+                reconnectAttempts = 0
                 await capture.start(requestPermission: true)
                 if capture.state == .permissionDenied {
                     openPrivacySettings()
@@ -154,6 +182,17 @@ final class StatusBarController: NSObject {
         showSettings()
     }
 
+    @objc private func showAbout() {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "未知"
+        let alert = NSAlert()
+        alert.messageText = "PulseBar"
+        alert.informativeText = "系统音频菜单栏频谱 · 版本 \(version)"
+        alert.icon = NSApp.applicationIconImage
+        alert.addButton(withTitle: "好")
+        alert.runModal()
+    }
+
     @objc private func relaunch() {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
@@ -166,5 +205,54 @@ final class StatusBarController: NSObject {
 
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
+    }
+
+    private func handleCaptureState(_ state: AudioCaptureService.State) {
+        switch state {
+        case .capturing:
+            reconnectAttempts = 0
+            reconnectTask?.cancel()
+            reconnectTask = nil
+        case .permissionDenied:
+            shouldListen = false
+        case .failed:
+            scheduleReconnect()
+        case .idle, .starting:
+            break
+        }
+    }
+
+    private func scheduleReconnect() {
+        guard shouldListen, reconnectTask == nil else { return }
+        guard reconnectAttempts < 3 else {
+            shouldListen = false
+            return
+        }
+        reconnectAttempts += 1
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled, let self, shouldListen else { return }
+            reconnectTask = nil
+            await capture.start()
+        }
+    }
+
+    private func suspendForSleep() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        guard shouldListen else { return }
+        Task { await capture.stop() }
+    }
+
+    private func resumeAfterWake() {
+        guard shouldListen else { return }
+        reconnectAttempts = 0
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled, let self, shouldListen else { return }
+            reconnectTask = nil
+            await capture.start()
+        }
     }
 }
