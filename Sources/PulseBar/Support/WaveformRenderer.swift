@@ -28,10 +28,15 @@ enum WaveformRenderer {
     }
 
     @MainActor
-    static func statusImage(levels: [CGFloat], preferences: WaveformPreferences) -> NSImage {
+    static func statusImage(
+        levels: [CGFloat],
+        peakLevels: [CGFloat],
+        preferences: WaveformPreferences
+    ) -> NSImage {
         image(
             size: NSSize(width: preferences.statusItemWidth, height: 18),
             levels: levels,
+            peakLevels: peakLevels,
             preferences: preferences
         )
     }
@@ -65,7 +70,9 @@ enum WaveformRenderer {
                     rect: rect.insetBy(dx: 0, dy: rect.height * 0.12),
                     values: values,
                     color: color,
-                    anchor: .centered
+                    anchor: .centered,
+                    layerSpacing: 0.14,
+                    alphas: [0.18, 1, 0.46]
                 )
             case .softSpectrum:
                 drawSoftSpectrum(
@@ -81,7 +88,10 @@ enum WaveformRenderer {
                     rect: rect,
                     values: values,
                     color: color,
-                    anchor: .upward
+                    anchor: .upward,
+                    shiftDivisor: 4,
+                    rearScale: 0.58,
+                    alphas: [0.15, 0.62]
                 )
             }
             return true
@@ -131,6 +141,7 @@ enum WaveformRenderer {
     private static func image(
         size: NSSize,
         levels: [CGFloat],
+        peakLevels: [CGFloat],
         preferences: WaveformPreferences
     ) -> NSImage {
         let shape = preferences.shape
@@ -145,9 +156,14 @@ enum WaveformRenderer {
             count: density,
             distribution: .centerOutward
         )
+        let peaks = displayedLevels(
+            peakLevels,
+            count: density,
+            distribution: .centerOutward
+        )
         let anchor = preferences.anchor
-        let idleStyle = preferences.idleStyle
         let orientation = preferences.orientation
+        let showsPeaks = preferences.peakHold && shape == .fineSpectrum
 
         let image = NSImage(size: size, flipped: false) { rect in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
@@ -167,10 +183,11 @@ enum WaveformRenderer {
                     in: context,
                     rect: rotatedRect,
                     values: values,
+                    peakValues: peaks,
                     shape: shape,
                     color: color,
                     anchor: anchor,
-                    idleStyle: idleStyle
+                    showsPeaks: showsPeaks
                 )
                 context.restoreGState()
             } else {
@@ -178,10 +195,11 @@ enum WaveformRenderer {
                     in: context,
                     rect: rect,
                     values: values,
+                    peakValues: peaks,
                     shape: shape,
                     color: color,
                     anchor: anchor,
-                    idleStyle: idleStyle
+                    showsPeaks: showsPeaks
                 )
             }
             return true
@@ -194,13 +212,23 @@ enum WaveformRenderer {
         in context: CGContext,
         rect: CGRect,
         values: [CGFloat],
+        peakValues: [CGFloat],
         shape: WaveformShape,
         color: NSColor,
         anchor: WaveformAnchor,
-        idleStyle: WaveformIdleStyle
+        showsPeaks: Bool
     ) {
         if values.max() ?? 0 < 0.025 {
-            drawIdle(in: context, rect: rect, color: color, style: idleStyle)
+            drawIdleWaveform(in: context, rect: rect, shape: shape, color: color, anchor: anchor)
+            if showsPeaks {
+                drawPeakIndicators(
+                    in: context,
+                    rect: rect,
+                    values: peakValues,
+                    color: color,
+                    anchor: anchor
+                )
+            }
             return
         }
 
@@ -213,6 +241,15 @@ enum WaveformRenderer {
                 color: color,
                 anchor: anchor
             )
+            if showsPeaks {
+                drawPeakIndicators(
+                    in: context,
+                    rect: rect,
+                    values: peakValues,
+                    color: color,
+                    anchor: anchor
+                )
+            }
         case .waveLines:
             drawWaveLines(in: context, rect: rect, values: values, color: color, anchor: anchor)
         case .softSpectrum:
@@ -246,33 +283,90 @@ enum WaveformRenderer {
         }
     }
 
-    private static func drawIdle(
+    private static func drawIdleWaveform(
         in context: CGContext,
         rect: CGRect,
+        shape: WaveformShape,
         color: NSColor,
-        style: WaveformIdleStyle
+        anchor: WaveformAnchor
     ) {
-        let count = 9
-        let maximumWidth = rect.width / CGFloat(count) * 0.58
-        let itemWidth: CGFloat = style == .dots
-            ? min(min(2.2, rect.height * 0.14), maximumWidth)
-            : min(min(2, rect.height * 0.12), maximumWidth)
-        let itemHeight: CGFloat = style == .dots ? itemWidth : max(4, rect.height * 0.24)
-        let spacing = (rect.width - itemWidth * CGFloat(count)) / CGFloat(count - 1)
-        context.setFillColor(color.withAlphaComponent(0.72).cgColor)
-
-        for index in 0..<count {
-            let item = CGRect(
-                x: rect.minX + CGFloat(index) * (itemWidth + spacing),
-                y: rect.midY - itemHeight / 2,
-                width: itemWidth,
-                height: itemHeight
+        switch shape {
+        case .fineSpectrum:
+            drawLayeredFineSpectrum(
+                in: context,
+                rect: rect,
+                values: Array(repeating: 0.12, count: 9),
+                color: color.withAlphaComponent(color.alphaComponent * 0.72),
+                anchor: anchor
             )
-            if style == .dots {
-                context.fillEllipse(in: item)
-            } else {
-                context.fill(item)
+        case .waveLines:
+            drawWaveLines(
+                in: context,
+                rect: rect,
+                values: Array(repeating: 0.08, count: 9),
+                color: color.withAlphaComponent(color.alphaComponent * 0.72),
+                anchor: anchor,
+                layerSpacing: 0.035,
+                alphas: [0.22, 0.72, 0.34]
+            )
+        case .softSpectrum:
+            drawSoftSpectrum(
+                in: context,
+                rect: rect,
+                values: Array(repeating: 0.11, count: 7),
+                color: color.withAlphaComponent(color.alphaComponent * 0.72),
+                anchor: anchor
+            )
+        case .mountains:
+            drawMountains(
+                in: context,
+                rect: rect,
+                values: Array(repeating: 0.08, count: 9),
+                color: color.withAlphaComponent(color.alphaComponent * 0.72),
+                anchor: anchor
+            )
+        }
+    }
+
+    private static func drawPeakIndicators(
+        in context: CGContext,
+        rect: CGRect,
+        values: [CGFloat],
+        color: NSColor,
+        anchor: WaveformAnchor
+    ) {
+        guard values.max() ?? 0 >= 0.025 else { return }
+        let spacing: CGFloat = rect.width < 80 ? 1 : 3
+        let barWidth = max(
+            1,
+            (rect.width - spacing * CGFloat(values.count - 1)) / CGFloat(values.count)
+        )
+        let diameter = min(2.2, max(1.4, barWidth * 1.2))
+
+        for (index, value) in values.enumerated() {
+            let height = min(1, value) * rect.height
+            let bar = anchoredRect(
+                x: rect.minX + CGFloat(index) * (barWidth + spacing),
+                width: barWidth,
+                height: height,
+                in: rect,
+                anchor: anchor
+            )
+            let centerY: CGFloat
+            switch anchor {
+            case .upward, .centered:
+                centerY = min(rect.maxY - diameter / 2, bar.maxY + 0.7 + diameter / 2)
+            case .downward:
+                centerY = max(rect.minY + diameter / 2, bar.minY - 0.7 - diameter / 2)
             }
+            let dot = CGRect(
+                x: bar.midX - diameter / 2,
+                y: centerY - diameter / 2,
+                width: diameter,
+                height: diameter
+            )
+            context.setFillColor(color.withAlphaComponent(color.alphaComponent * 0.92).cgColor)
+            context.fillEllipse(in: dot)
         }
     }
 
@@ -345,10 +439,11 @@ enum WaveformRenderer {
         rect: CGRect,
         values: [CGFloat],
         color: NSColor,
-        anchor: WaveformAnchor
+        anchor: WaveformAnchor,
+        layerSpacing: CGFloat = 0.08,
+        alphas: [CGFloat] = [0.34, 0.9, 0.5]
     ) {
         let average = values.reduce(0, +) / CGFloat(values.count)
-        let alphas: [CGFloat] = [0.34, 0.9, 0.5]
 
         let offsets = [-max(1, values.count / 10), 0, max(1, values.count / 10)]
         for layer in offsets.indices {
@@ -363,7 +458,8 @@ enum WaveformRenderer {
                         average: average,
                         layer: layer,
                         rect: rect,
-                        anchor: anchor
+                        anchor: anchor,
+                        layerSpacing: layerSpacing
                     )
                 )
             }
@@ -423,13 +519,15 @@ enum WaveformRenderer {
         rect: CGRect,
         values: [CGFloat],
         color: NSColor,
-        anchor: WaveformAnchor
+        anchor: WaveformAnchor,
+        shiftDivisor: Int = 7,
+        rearScale: CGFloat = 0.78,
+        alphas: [CGFloat] = [0.2, 0.48]
     ) {
         let base = spatialAverage(values, radius: values.count < 15 ? 1 : 2)
-        let shift = max(1, values.count / 7)
+        let shift = max(1, values.count / shiftDivisor)
         let offsets = [-shift, 0]
-        let scales: [CGFloat] = [0.78, 1]
-        let alphas: [CGFloat] = [0.2, 0.48]
+        let scales: [CGFloat] = [rearScale, 1]
 
         for layer in offsets.indices {
             let shifted = base.indices.map { index in
@@ -475,9 +573,10 @@ enum WaveformRenderer {
         average: CGFloat,
         layer: Int,
         rect: CGRect,
-        anchor: WaveformAnchor
+        anchor: WaveformAnchor,
+        layerSpacing: CGFloat
     ) -> CGFloat {
-        let layerOffset = CGFloat(layer - 1) * rect.height * 0.08
+        let layerOffset = CGFloat(layer - 1) * rect.height * layerSpacing
         switch anchor {
         case .upward:
             return rect.minY + value * rect.height * 0.86 + layerOffset

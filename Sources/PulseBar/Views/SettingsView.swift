@@ -44,14 +44,11 @@ struct SettingsView: View {
                     SpectrumWidthSlider(preferences: preferences)
                 }
 
-                if preferences.shape == .fineSpectrum || preferences.shape == .softSpectrum {
-                    Picker("静音状态", selection: $preferences.idleStyle) {
-                        ForEach(WaveformIdleStyle.allCases) { style in
-                            Text(style.title).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
+                Toggle("峰值悬停", isOn: $preferences.peakHold)
+                    .opacity(preferences.shape == .fineSpectrum ? 1 : 0)
+                    .allowsHitTesting(preferences.shape == .fineSpectrum)
+                    .accessibilityHidden(preferences.shape != .fineSpectrum)
+                    .frame(height: 20)
             }
 
             Section("启动") {

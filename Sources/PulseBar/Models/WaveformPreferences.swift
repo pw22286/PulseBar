@@ -73,20 +73,6 @@ enum WaveformOrientation: String, CaseIterable, Identifiable {
     }
 }
 
-enum WaveformIdleStyle: String, CaseIterable, Identifiable {
-    case dots
-    case shortBars
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .dots: "圆点"
-        case .shortBars: "短竖线"
-        }
-    }
-}
-
 enum SpectrumWidth: String, CaseIterable, Identifiable {
     case compact
     case standard
@@ -122,8 +108,8 @@ final class WaveformPreferences: ObservableObject {
         static let colorMode = "waveform.colorMode"
         static let customColor = "waveform.singleColor"
         static let orientation = "waveform.orientation"
-        static let idleStyle = "waveform.idleStyle"
         static let spectrumWidth = "waveform.spectrumWidth"
+        static let peakHold = "waveform.peakHold"
         static let autoListen = "capture.autoListen"
     }
 
@@ -144,11 +130,11 @@ final class WaveformPreferences: ObservableObject {
     @Published var orientation: WaveformOrientation {
         didSet { defaults.set(orientation.rawValue, forKey: Key.orientation) }
     }
-    @Published var idleStyle: WaveformIdleStyle {
-        didSet { defaults.set(idleStyle.rawValue, forKey: Key.idleStyle) }
-    }
     @Published var spectrumWidth: SpectrumWidth {
         didSet { defaults.set(spectrumWidth.rawValue, forKey: Key.spectrumWidth) }
+    }
+    @Published var peakHold: Bool {
+        didSet { defaults.set(peakHold, forKey: Key.peakHold) }
     }
     @Published var autoListen: Bool {
         didSet { defaults.set(autoListen, forKey: Key.autoListen) }
@@ -166,10 +152,10 @@ final class WaveformPreferences: ObservableObject {
         orientation = WaveformOrientation(
             rawValue: defaults.string(forKey: Key.orientation) ?? ""
         ) ?? .vertical
-        idleStyle = WaveformIdleStyle(rawValue: defaults.string(forKey: Key.idleStyle) ?? "") ?? .dots
         spectrumWidth = SpectrumWidth(
             rawValue: defaults.string(forKey: Key.spectrumWidth) ?? ""
         ) ?? .standard
+        peakHold = defaults.object(forKey: Key.peakHold) as? Bool ?? false
         autoListen = defaults.object(forKey: Key.autoListen) as? Bool ?? true
         refreshLoginItemStatus()
     }

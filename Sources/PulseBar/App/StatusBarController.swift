@@ -6,6 +6,7 @@ final class StatusBarController: NSObject {
     private let capture = AudioCaptureService()
     private let preferences = WaveformPreferences()
     private let statusItem = NSStatusBar.system.statusItem(withLength: 38)
+    private var peakLevels: [CGFloat] = []
     private var cancellables = Set<AnyCancellable>()
     private lazy var settingsWindow = SettingsWindowController(
         preferences: preferences
@@ -20,12 +21,22 @@ final class StatusBarController: NSObject {
 
         capture.$levels
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] levels in self?.updateIcon(levels) }
+            .sink { [weak self] levels in
+                self?.updatePeakLevels(with: levels)
+                self?.updateIcon(levels)
+            }
             .store(in: &cancellables)
 
         capture.$state
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.updateMenu() }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                if !capture.isCapturing {
+                    peakLevels = Array(repeating: 0, count: capture.levels.count)
+                    updateIcon(capture.levels)
+                }
+                updateMenu()
+            }
             .store(in: &cancellables)
 
         preferences.objectWillChange
@@ -53,9 +64,20 @@ final class StatusBarController: NSObject {
         statusItem.length = preferences.statusItemWidth
         statusItem.button?.image = WaveformRenderer.statusImage(
             levels: levels,
+            peakLevels: peakLevels,
             preferences: preferences
         )
         statusItem.button?.setAccessibilityLabel("系统音频波形")
+    }
+
+    private func updatePeakLevels(with levels: [CGFloat]) {
+        if peakLevels.count != levels.count {
+            peakLevels = levels
+            return
+        }
+        peakLevels = zip(peakLevels, levels).map { peak, level in
+            max(level, peak - 0.018)
+        }
     }
 
     private func updateMenu() {
