@@ -83,15 +83,10 @@ enum WaveformRenderer {
                     anchor: .upward
                 )
             case .mountains:
-                drawMountains(
+                drawMountainPreview(
                     in: context,
                     rect: rect,
-                    values: values,
-                    color: color,
-                    anchor: .upward,
-                    shiftDivisor: 4,
-                    rearScale: 0.58,
-                    alphas: [0.15, 0.62]
+                    color: color
                 )
             }
             return true
@@ -538,6 +533,26 @@ enum WaveformRenderer {
             context.addPath(path)
             context.setFillColor(
                 color.withAlphaComponent(color.alphaComponent * alphas[layer]).cgColor
+            )
+            context.fillPath()
+        }
+    }
+
+    private static func drawMountainPreview(
+        in context: CGContext,
+        rect: CGRect,
+        color: NSColor
+    ) {
+        let layers: [[CGFloat]] = [
+            [0, 0.18, 0.45, 0.78, 0.92, 0.8, 0.55, 0.38, 0.3, 0.24, 0.18, 0.12, 0.08, 0.04, 0],
+            [0, 0.06, 0.12, 0.22, 0.34, 0.46, 0.52, 0.6, 0.64, 0.58, 0.48, 0.42, 0.38, 0.26, 0]
+        ]
+        let alphas: [CGFloat] = [0.28, 0.72]
+
+        for index in layers.indices {
+            context.addPath(mountainPath(values: layers[index], rect: rect, anchor: .upward))
+            context.setFillColor(
+                color.withAlphaComponent(color.alphaComponent * alphas[index]).cgColor
             )
             context.fillPath()
         }
