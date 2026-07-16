@@ -210,7 +210,14 @@ enum WaveformRenderer {
         showsPeaks: Bool
     ) {
         if values.max() ?? 0 < 0.025 {
-            drawIdleWaveform(in: context, rect: rect, shape: shape, color: color, anchor: anchor)
+            drawIdleWaveform(
+                in: context,
+                rect: rect,
+                count: values.count,
+                shape: shape,
+                color: color,
+                anchor: anchor
+            )
             if showsPeaks {
                 drawPeakIndicators(
                     in: context,
@@ -288,17 +295,18 @@ enum WaveformRenderer {
     private static func drawIdleWaveform(
         in context: CGContext,
         rect: CGRect,
+        count: Int,
         shape: WaveformShape,
         color: NSColor,
         anchor: WaveformAnchor
     ) {
         switch shape {
-        case .fineSpectrum:
-            drawLayeredFineSpectrum(
+        case .fineSpectrum, .softSpectrum:
+            drawIdleDots(
                 in: context,
                 rect: rect,
-                values: Array(repeating: 0.12, count: 9),
-                color: color.withAlphaComponent(color.alphaComponent * 0.72),
+                count: count,
+                color: color,
                 anchor: anchor
             )
         case .waveLines:
@@ -311,14 +319,6 @@ enum WaveformRenderer {
                 layerSpacing: 0.035,
                 alphas: [0.22, 0.72, 0.34]
             )
-        case .softSpectrum:
-            drawSoftSpectrum(
-                in: context,
-                rect: rect,
-                values: Array(repeating: 0.11, count: 7),
-                color: color.withAlphaComponent(color.alphaComponent * 0.72),
-                anchor: anchor
-            )
         case .mountains:
             drawMountains(
                 in: context,
@@ -326,6 +326,38 @@ enum WaveformRenderer {
                 values: Array(repeating: 0.08, count: 9),
                 color: color.withAlphaComponent(color.alphaComponent * 0.72),
                 anchor: anchor
+            )
+        }
+    }
+
+    private static func drawIdleDots(
+        in context: CGContext,
+        rect: CGRect,
+        count: Int,
+        color: NSColor,
+        anchor: WaveformAnchor
+    ) {
+        guard count > 0 else { return }
+        let diameter = min(1.5, rect.width / CGFloat(count) * 0.58)
+        let spacing = count == 1
+            ? 0
+            : (rect.width - diameter * CGFloat(count)) / CGFloat(count - 1)
+        let centerY: CGFloat
+        switch anchor {
+        case .upward: centerY = rect.minY + diameter / 2
+        case .centered: centerY = rect.midY
+        case .downward: centerY = rect.maxY - diameter / 2
+        }
+        context.setFillColor(color.withAlphaComponent(color.alphaComponent * 0.72).cgColor)
+
+        for index in 0..<count {
+            context.fillEllipse(
+                in: CGRect(
+                    x: rect.minX + CGFloat(index) * (diameter + spacing),
+                    y: centerY - diameter / 2,
+                    width: diameter,
+                    height: diameter
+                )
             )
         }
     }
