@@ -362,8 +362,12 @@ enum WaveformRenderer {
             case .downward:
                 centerY = max(rect.minY + diameter / 2, bar.minY - 0.7 - diameter / 2)
             }
+            let dotX = min(
+                rect.maxX - diameter,
+                max(rect.minX, bar.midX - diameter / 2)
+            )
             let dot = CGRect(
-                x: bar.midX - diameter / 2,
+                x: dotX,
                 y: centerY - diameter / 2,
                 width: diameter,
                 height: diameter
