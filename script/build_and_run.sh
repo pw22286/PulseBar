@@ -5,10 +5,12 @@ MODE="${1:-run}"
 APP_NAME="PulseBar"
 BUNDLE_ID="com.pulsebar.app"
 MIN_SYSTEM_VERSION="13.0"
-APP_VERSION="1.10.0"
 BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+UNIVERSAL="${UNIVERSAL:-0}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
@@ -22,8 +24,13 @@ export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/ModuleCache"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
-swift build --package-path "$ROOT_DIR" -c "$BUILD_CONFIGURATION"
-BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" -c "$BUILD_CONFIGURATION" --show-bin-path)/$APP_NAME"
+SWIFT_BUILD_ARGS=(--package-path "$ROOT_DIR" -c "$BUILD_CONFIGURATION")
+if [[ "$UNIVERSAL" == "1" ]]; then
+  SWIFT_BUILD_ARGS+=(--arch arm64 --arch x86_64)
+fi
+
+swift build "${SWIFT_BUILD_ARGS[@]}"
+BUILD_BINARY="$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)/$APP_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
@@ -75,13 +82,24 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign \
-  --force \
-  --deep \
-  --sign - \
-  --identifier "$BUNDLE_ID" \
-  --requirements "=designated => identifier \"$BUNDLE_ID\"" \
-  "$APP_BUNDLE"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  codesign \
+    --force \
+    --deep \
+    --sign - \
+    --identifier "$BUNDLE_ID" \
+    --requirements "=designated => identifier \"$BUNDLE_ID\"" \
+    "$APP_BUNDLE"
+else
+  codesign \
+    --force \
+    --deep \
+    --options runtime \
+    --timestamp \
+    --sign "$SIGN_IDENTITY" \
+    --identifier "$BUNDLE_ID" \
+    "$APP_BUNDLE"
+fi
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

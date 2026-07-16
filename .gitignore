@@ -1,4 +1,8 @@
 .build/
+.swiftpm/
+DerivedData/
 dist/
 outputs/
+*.dSYM/
+*.xcresult/
 .DS_Store

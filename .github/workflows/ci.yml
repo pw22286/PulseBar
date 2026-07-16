@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check spectrum analyzer
+        run: ./script/test.sh
+      - name: Build app bundle
+        run: ./script/build_and_run.sh --build-only
+      - name: Verify signature
+        run: codesign --verify --deep --strict --verbose=2 dist/PulseBar.app
