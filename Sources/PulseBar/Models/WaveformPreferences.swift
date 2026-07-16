@@ -35,6 +35,10 @@ enum WaveformShape: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
+    var isBarStyle: Bool {
+        self == .fineSpectrum || self == .softSpectrum
+    }
+
     var title: String {
         switch self {
         case .fineSpectrum: "细条"

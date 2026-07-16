@@ -45,9 +45,9 @@ struct SettingsView: View {
                 }
 
                 Toggle("峰值悬停", isOn: $preferences.peakHold)
-                    .opacity(preferences.shape == .fineSpectrum ? 1 : 0)
-                    .allowsHitTesting(preferences.shape == .fineSpectrum)
-                    .accessibilityHidden(preferences.shape != .fineSpectrum)
+                    .opacity(preferences.shape.isBarStyle ? 1 : 0)
+                    .allowsHitTesting(preferences.shape.isBarStyle)
+                    .accessibilityHidden(!preferences.shape.isBarStyle)
                     .frame(height: 20)
             }
 

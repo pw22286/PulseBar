@@ -83,10 +83,12 @@ enum WaveformRenderer {
                     anchor: .upward
                 )
             case .mountains:
-                drawMountainPreview(
+                drawMountains(
                     in: context,
                     rect: rect,
-                    color: color
+                    values: values,
+                    color: color,
+                    anchor: .upward
                 )
             }
             return true
@@ -108,17 +110,11 @@ enum WaveformRenderer {
                 0.92, 0.68, 0.42, 0.28, 0.36, 0.6, 0.8, 0.62, 0.4,
                 0.3, 0.44, 0.7, 0.56, 0.34, 0.24
             ]
-        case .softSpectrum:
+        case .softSpectrum, .mountains:
             return [
                 0.05, 0.08, 0.14, 0.26, 0.5, 0.82, 0.98, 0.84, 0.58,
                 0.3, 0.14, 0.1, 0.16, 0.3, 0.54, 0.68, 0.56, 0.36,
                 0.2, 0.12, 0.18, 0.34, 0.58, 0.72, 0.6, 0.38, 0.18, 0.08
-            ]
-        case .mountains:
-            return [
-                0.04, 0.08, 0.16, 0.3, 0.52, 0.86, 0.66, 0.48, 0.38,
-                0.28, 0.2, 0.3, 0.46, 0.64, 0.46, 0.32, 0.24, 0.18,
-                0.28, 0.42, 0.58, 0.36, 0.2, 0.08
             ]
         }
     }
@@ -158,7 +154,7 @@ enum WaveformRenderer {
         )
         let anchor = preferences.anchor
         let orientation = preferences.orientation
-        let showsPeaks = preferences.peakHold && shape == .fineSpectrum
+        let showsPeaks = preferences.peakHold && shape.isBarStyle
 
         let image = NSImage(size: size, flipped: false) { rect in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
@@ -221,7 +217,8 @@ enum WaveformRenderer {
                     rect: rect,
                     values: peakValues,
                     color: color,
-                    anchor: anchor
+                    anchor: anchor,
+                    shape: shape
                 )
             }
             return
@@ -242,13 +239,24 @@ enum WaveformRenderer {
                     rect: rect,
                     values: peakValues,
                     color: color,
-                    anchor: anchor
+                    anchor: anchor,
+                    shape: shape
                 )
             }
         case .waveLines:
             drawWaveLines(in: context, rect: rect, values: values, color: color, anchor: anchor)
         case .softSpectrum:
             drawSoftSpectrum(in: context, rect: rect, values: values, color: color, anchor: anchor)
+            if showsPeaks {
+                drawPeakIndicators(
+                    in: context,
+                    rect: rect,
+                    values: peakValues,
+                    color: color,
+                    anchor: anchor,
+                    shape: shape
+                )
+            }
         case .mountains:
             drawMountains(in: context, rect: rect, values: values, color: color, anchor: anchor)
         }
@@ -273,8 +281,7 @@ enum WaveformRenderer {
         switch shape {
         case .fineSpectrum: return 61
         case .waveLines: return 45
-        case .softSpectrum: return 49
-        case .mountains: return 21
+        case .softSpectrum, .mountains: return 49
         }
     }
 
@@ -328,12 +335,13 @@ enum WaveformRenderer {
         rect: CGRect,
         values: [CGFloat],
         color: NSColor,
-        anchor: WaveformAnchor
+        anchor: WaveformAnchor,
+        shape: WaveformShape
     ) {
         guard values.max() ?? 0 >= 0.025 else { return }
-        let spacing: CGFloat = rect.width < 80 ? 1 : 3
+        let spacing: CGFloat = shape == .softSpectrum && rect.width < 80 ? 1.1 : (rect.width < 80 ? 1 : 3)
         let barWidth = max(
-            1,
+            shape == .softSpectrum ? 1.4 : 1,
             (rect.width - spacing * CGFloat(values.count - 1)) / CGFloat(values.count)
         )
         let diameter = min(2.2, max(1.4, barWidth * 1.2))
@@ -516,18 +524,17 @@ enum WaveformRenderer {
         color: NSColor,
         anchor: WaveformAnchor,
         shiftDivisor: Int = 7,
-        rearScale: CGFloat = 0.78,
-        alphas: [CGFloat] = [0.2, 0.48]
+        frontScale: CGFloat = 0.72,
+        alphas: [CGFloat] = [0.22, 0.58]
     ) {
-        let base = spatialAverage(values, radius: values.count < 15 ? 1 : 2)
         let shift = max(1, values.count / shiftDivisor)
         let offsets = [-shift, 0]
-        let scales: [CGFloat] = [rearScale, 1]
+        let scales: [CGFloat] = [1, frontScale]
 
         for layer in offsets.indices {
-            let shifted = base.indices.map { index in
-                let source = min(base.count - 1, max(0, index + offsets[layer]))
-                return min(1, base[source] * scales[layer])
+            let shifted = values.indices.map { index in
+                let source = min(values.count - 1, max(0, index + offsets[layer]))
+                return min(1, values[source] * scales[layer])
             }
             let path = mountainPath(values: shifted, rect: rect, anchor: anchor)
             context.addPath(path)
@@ -535,35 +542,6 @@ enum WaveformRenderer {
                 color.withAlphaComponent(color.alphaComponent * alphas[layer]).cgColor
             )
             context.fillPath()
-        }
-    }
-
-    private static func drawMountainPreview(
-        in context: CGContext,
-        rect: CGRect,
-        color: NSColor
-    ) {
-        let layers: [[CGFloat]] = [
-            [0, 0.18, 0.45, 0.78, 0.92, 0.8, 0.55, 0.38, 0.3, 0.24, 0.18, 0.12, 0.08, 0.04, 0],
-            [0, 0.06, 0.12, 0.22, 0.34, 0.46, 0.52, 0.6, 0.64, 0.58, 0.48, 0.42, 0.38, 0.26, 0]
-        ]
-        let alphas: [CGFloat] = [0.28, 0.72]
-
-        for index in layers.indices {
-            context.addPath(mountainPath(values: layers[index], rect: rect, anchor: .upward))
-            context.setFillColor(
-                color.withAlphaComponent(color.alphaComponent * alphas[index]).cgColor
-            )
-            context.fillPath()
-        }
-    }
-
-    private static func spatialAverage(_ values: [CGFloat], radius: Int) -> [CGFloat] {
-        values.indices.map { index in
-            let lower = max(0, index - radius)
-            let upper = min(values.count - 1, index + radius)
-            let sum = values[lower...upper].reduce(0, +)
-            return sum / CGFloat(upper - lower + 1)
         }
     }
 
