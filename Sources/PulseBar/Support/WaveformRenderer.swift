@@ -158,12 +158,12 @@ enum WaveformRenderer {
             count: density,
             distribution: .centerOutward
         )
-        let mountainForeground = displayedLevels(
+        let lowFrequencies = displayedLevels(
             lowFrequencyLevels,
             count: density,
             distribution: .centerOutward
         )
-        let mountainBackground = displayedLevels(
+        let highFrequencies = displayedLevels(
             highFrequencyLevels,
             count: density,
             distribution: .centerOutward
@@ -190,8 +190,8 @@ enum WaveformRenderer {
                     in: context,
                     rect: rotatedRect,
                     values: values,
-                    mountainForegroundValues: mountainForeground,
-                    mountainBackgroundValues: mountainBackground,
+                    lowFrequencyValues: lowFrequencies,
+                    highFrequencyValues: highFrequencies,
                     peakValues: peaks,
                     shape: shape,
                     color: color,
@@ -204,8 +204,8 @@ enum WaveformRenderer {
                     in: context,
                     rect: rect,
                     values: values,
-                    mountainForegroundValues: mountainForeground,
-                    mountainBackgroundValues: mountainBackground,
+                    lowFrequencyValues: lowFrequencies,
+                    highFrequencyValues: highFrequencies,
                     peakValues: peaks,
                     shape: shape,
                     color: color,
@@ -223,8 +223,8 @@ enum WaveformRenderer {
         in context: CGContext,
         rect: CGRect,
         values: [CGFloat],
-        mountainForegroundValues: [CGFloat],
-        mountainBackgroundValues: [CGFloat],
+        lowFrequencyValues: [CGFloat],
+        highFrequencyValues: [CGFloat],
         peakValues: [CGFloat],
         shape: WaveformShape,
         color: NSColor,
@@ -258,7 +258,8 @@ enum WaveformRenderer {
             drawLayeredFineSpectrum(
                 in: context,
                 rect: rect,
-                values: values,
+                values: lowFrequencyValues,
+                backgroundValues: highFrequencyValues,
                 color: color,
                 anchor: anchor
             )
@@ -290,8 +291,8 @@ enum WaveformRenderer {
             drawMountains(
                 in: context,
                 rect: rect,
-                values: mountainForegroundValues,
-                backgroundValues: mountainBackgroundValues,
+                values: lowFrequencyValues,
+                backgroundValues: highFrequencyValues,
                 color: color,
                 anchor: anchor
             )
@@ -468,36 +469,32 @@ enum WaveformRenderer {
         in context: CGContext,
         rect: CGRect,
         values: [CGFloat],
+        backgroundValues: [CGFloat]? = nil,
         color: NSColor,
         anchor: WaveformAnchor
     ) {
-        let rearShift = max(2, values.count / 5)
-        let middleShift = max(1, values.count / 10)
-        let rear = values.indices.map {
-            values[($0 + rearShift) % values.count] * 0.72
-        }
-        let middle = values.indices.map {
-            values[($0 + middleShift) % values.count] * 0.86
+        guard !values.isEmpty else { return }
+        let background: [CGFloat]
+        if let backgroundValues, backgroundValues.count == values.count {
+            background = backgroundValues
+        } else {
+            let shift = max(1, values.count / 7)
+            background = values.indices.map { index in
+                values[max(0, index - shift)]
+            }
         }
         drawFineSpectrum(
             in: context,
             rect: rect,
-            values: rear,
-            color: color.withAlphaComponent(color.alphaComponent * 0.22),
+            values: background,
+            color: color.withAlphaComponent(color.alphaComponent * 0.24),
             anchor: anchor
         )
         drawFineSpectrum(
             in: context,
             rect: rect,
-            values: middle,
-            color: color.withAlphaComponent(color.alphaComponent * 0.42),
-            anchor: anchor
-        )
-        drawFineSpectrum(
-            in: context,
-            rect: rect,
-            values: values,
-            color: color,
+            values: values.map { min(1, $0 * 0.82) },
+            color: color.withAlphaComponent(color.alphaComponent * 0.82),
             anchor: anchor
         )
     }
