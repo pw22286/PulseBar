@@ -27,6 +27,8 @@ final class AudioCaptureService: NSObject, ObservableObject {
 
     @Published private(set) var levels = Array(repeating: CGFloat(0), count: 32)
     @Published private(set) var state = State.idle
+    private(set) var lowFrequencyLevels: [CGFloat] = []
+    private(set) var highFrequencyLevels: [CGFloat] = []
 
     private let sampleQueue = DispatchQueue(label: "com.pulsebar.audio")
     private let analyzer = SpectrumAnalyzer(bandCount: 32)
@@ -103,6 +105,8 @@ final class AudioCaptureService: NSObject, ObservableObject {
         analyzer.reset()
         isSilent = true
         levels = Array(repeating: 0, count: levels.count)
+        lowFrequencyLevels.removeAll(keepingCapacity: true)
+        highFrequencyLevels.removeAll(keepingCapacity: true)
         state = .idle
     }
 
@@ -221,10 +225,12 @@ extension AudioCaptureService: SCStreamOutput, SCStreamDelegate {
             samples: audio.samples,
             sampleRate: audio.sampleRate
         ) else { return }
-        isSilent = spectrum.max() ?? 0 < 0.025
+        isSilent = spectrum.levels.max() ?? 0 < 0.025
 
         Task { @MainActor [weak self] in
-            self?.levels = spectrum
+            self?.lowFrequencyLevels = spectrum.lowFrequencyLevels
+            self?.highFrequencyLevels = spectrum.highFrequencyLevels
+            self?.levels = spectrum.levels
         }
     }
 

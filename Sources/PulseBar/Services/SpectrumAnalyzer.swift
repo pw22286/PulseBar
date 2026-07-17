@@ -1,10 +1,19 @@
 import Accelerate
 import CoreGraphics
 
+struct SpectrumFrame {
+    let levels: [CGFloat]
+    let lowFrequencyLevels: [CGFloat]
+    let highFrequencyLevels: [CGFloat]
+}
+
 final class SpectrumAnalyzer {
     let bandCount: Int
 
     private let fftSize = 1_024
+    private let minimumFrequency = 55.0
+    private let maximumFrequency = 16_000.0
+    private let crossoverFrequency = 500.0
     private let log2FFTSize: vDSP_Length
     private let fftSetup: FFTSetup
     private var pendingSamples: [Float] = []
@@ -40,7 +49,7 @@ final class SpectrumAnalyzer {
         smoothed = Array(repeating: 0, count: bandCount)
     }
 
-    func process(samples: [Float], sampleRate: Double) -> [CGFloat]? {
+    func process(samples: [Float], sampleRate: Double) -> SpectrumFrame? {
         guard !samples.isEmpty else { return nil }
         pendingSamples.append(contentsOf: samples)
         guard pendingSamples.count >= fftSize else { return nil }
@@ -101,17 +110,31 @@ final class SpectrumAnalyzer {
             smoothed[index] += (rawBands[index] - smoothed[index]) * coefficient
         }
 
+        let upperFrequency = min(maximumFrequency, sampleRate * 0.48)
+        let crossoverPosition = log(crossoverFrequency / minimumFrequency)
+            / log(upperFrequency / minimumFrequency) * Double(bandCount)
+        let crossoverBand = min(bandCount - 1, max(0, Int(crossoverPosition)))
+        let lowWeight = Float(crossoverPosition - Double(crossoverBand))
+
+        var low = Array(smoothed[0...crossoverBand])
+        low[low.count - 1] *= lowWeight
+        var high = Array(smoothed[crossoverBand..<bandCount])
+        high[0] *= 1 - lowWeight
+
         // Bass ends last so center-outward rendering places it at the center.
-        return smoothed.reversed().map(CGFloat.init)
+        return SpectrumFrame(
+            levels: smoothed.reversed().map(CGFloat.init),
+            lowFrequencyLevels: low.reversed().map(CGFloat.init),
+            highFrequencyLevels: high.reversed().map(CGFloat.init)
+        )
     }
 
     private func bands(sampleRate: Double, silence: Bool) -> [Float] {
         guard !silence else { return Array(repeating: 0, count: bandCount) }
 
-        let minimumFrequency = 55.0
-        let maximumFrequency = min(16_000, sampleRate * 0.48)
+        let upperFrequency = min(maximumFrequency, sampleRate * 0.48)
         let binWidth = sampleRate / Double(fftSize)
-        let frequencyRatio = maximumFrequency / minimumFrequency
+        let frequencyRatio = upperFrequency / minimumFrequency
 
         return (0..<bandCount).map { band in
             let lower = minimumFrequency * pow(

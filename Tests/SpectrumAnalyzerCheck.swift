@@ -7,19 +7,26 @@ enum SpectrumAnalyzerCheck {
         guard let silence = silenceAnalyzer.process(
             samples: Array(repeating: 0, count: 1_024),
             sampleRate: 48_000
-        ), silence.count == 32, silence.max() ?? 1 < 0.001 else {
+        ), silence.levels.count == 32, silence.levels.max() ?? 1 < 0.001 else {
             fatalError("Silence spectrum check failed")
         }
 
-        let toneAnalyzer = SpectrumAnalyzer()
         let sampleRate = 48_000.0
-        let samples = (0..<1_024).map { index in
-            Float(sin(2 * Double.pi * 440 * Double(index) / sampleRate) * 0.5)
+        func tone(_ frequency: Double) -> [Float] {
+            (0..<1_024).map { index in
+                Float(sin(2 * Double.pi * frequency * Double(index) / sampleRate) * 0.5)
+            }
         }
-        guard let tone = toneAnalyzer.process(samples: samples, sampleRate: sampleRate),
-              tone.count == 32,
-              tone.max() ?? 0 > 0.1 else {
-            fatalError("Tone spectrum check failed")
+
+        guard let bass = SpectrumAnalyzer().process(samples: tone(120), sampleRate: sampleRate),
+              (bass.lowFrequencyLevels.max() ?? 0)
+                > (bass.highFrequencyLevels.max() ?? 0) else {
+            fatalError("Low-frequency layer check failed")
+        }
+        guard let treble = SpectrumAnalyzer().process(samples: tone(4_000), sampleRate: sampleRate),
+              (treble.highFrequencyLevels.max() ?? 0)
+                > (treble.lowFrequencyLevels.max() ?? 0) else {
+            fatalError("High-frequency layer check failed")
         }
 
         print("Spectrum checks passed")

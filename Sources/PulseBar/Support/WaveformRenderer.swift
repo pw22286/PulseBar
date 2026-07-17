@@ -30,14 +30,16 @@ enum WaveformRenderer {
     @MainActor
     static func statusImage(
         levels: [CGFloat],
-        delayedLevels: [CGFloat],
+        lowFrequencyLevels: [CGFloat],
+        highFrequencyLevels: [CGFloat],
         peakLevels: [CGFloat],
         preferences: WaveformPreferences
     ) -> NSImage {
         image(
             size: NSSize(width: preferences.statusItemWidth, height: 18),
             levels: levels,
-            delayedLevels: delayedLevels,
+            lowFrequencyLevels: lowFrequencyLevels,
+            highFrequencyLevels: highFrequencyLevels,
             peakLevels: peakLevels,
             preferences: preferences
         )
@@ -134,7 +136,8 @@ enum WaveformRenderer {
     private static func image(
         size: NSSize,
         levels: [CGFloat],
-        delayedLevels: [CGFloat],
+        lowFrequencyLevels: [CGFloat],
+        highFrequencyLevels: [CGFloat],
         peakLevels: [CGFloat],
         preferences: WaveformPreferences
     ) -> NSImage {
@@ -155,8 +158,13 @@ enum WaveformRenderer {
             count: density,
             distribution: .centerOutward
         )
-        let delayed = displayedLevels(
-            delayedLevels.isEmpty ? levels : delayedLevels,
+        let mountainForeground = displayedLevels(
+            lowFrequencyLevels,
+            count: density,
+            distribution: .centerOutward
+        )
+        let mountainBackground = displayedLevels(
+            highFrequencyLevels,
             count: density,
             distribution: .centerOutward
         )
@@ -182,7 +190,8 @@ enum WaveformRenderer {
                     in: context,
                     rect: rotatedRect,
                     values: values,
-                    rearValues: delayed,
+                    mountainForegroundValues: mountainForeground,
+                    mountainBackgroundValues: mountainBackground,
                     peakValues: peaks,
                     shape: shape,
                     color: color,
@@ -195,7 +204,8 @@ enum WaveformRenderer {
                     in: context,
                     rect: rect,
                     values: values,
-                    rearValues: delayed,
+                    mountainForegroundValues: mountainForeground,
+                    mountainBackgroundValues: mountainBackground,
                     peakValues: peaks,
                     shape: shape,
                     color: color,
@@ -213,7 +223,8 @@ enum WaveformRenderer {
         in context: CGContext,
         rect: CGRect,
         values: [CGFloat],
-        rearValues: [CGFloat],
+        mountainForegroundValues: [CGFloat],
+        mountainBackgroundValues: [CGFloat],
         peakValues: [CGFloat],
         shape: WaveformShape,
         color: NSColor,
@@ -279,8 +290,8 @@ enum WaveformRenderer {
             drawMountains(
                 in: context,
                 rect: rect,
-                values: values,
-                rearValues: rearValues,
+                values: mountainForegroundValues,
+                backgroundValues: mountainBackgroundValues,
                 color: color,
                 anchor: anchor
             )
@@ -575,23 +586,23 @@ enum WaveformRenderer {
         in context: CGContext,
         rect: CGRect,
         values: [CGFloat],
-        rearValues: [CGFloat]? = nil,
+        backgroundValues: [CGFloat]? = nil,
         color: NSColor,
         anchor: WaveformAnchor,
         shiftDivisor: Int = 7,
         frontScale: CGFloat = 0.72,
         alphas: [CGFloat] = [0.22, 0.58]
     ) {
-        let rear: [CGFloat]
-        if let rearValues, rearValues.count == values.count {
-            rear = rearValues
+        let background: [CGFloat]
+        if let backgroundValues, backgroundValues.count == values.count {
+            background = backgroundValues
         } else {
             let shift = max(1, values.count / shiftDivisor)
-            rear = values.indices.map { index in
+            background = values.indices.map { index in
                 values[max(0, index - shift)]
             }
         }
-        let layers = [rear, values.map { min(1, $0 * frontScale) }]
+        let layers = [background, values.map { min(1, $0 * frontScale) }]
 
         for layer in layers.indices {
             let path = mountainPath(values: layers[layer], rect: rect, anchor: anchor)
