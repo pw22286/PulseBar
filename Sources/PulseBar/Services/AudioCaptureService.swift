@@ -34,7 +34,6 @@ final class AudioCaptureService: NSObject, ObservableObject {
     private let logger = Logger(subsystem: "com.pulsebar.app", category: "AudioCapture")
     private var stream: SCStream?
     private var isSilent = true
-    private var lastMeterLog = Date.distantPast
     private var lastPublishTime = Date.distantPast
 
     var isCapturing: Bool { state == .capturing || state == .starting }
@@ -224,10 +223,6 @@ extension AudioCaptureService: SCStreamOutput, SCStreamDelegate {
         ) else { return }
         isSilent = spectrum.max() ?? 0 < 0.025
 
-        if Date().timeIntervalSince(lastMeterLog) >= 10 {
-            logger.debug("Spectrum peak: \(spectrum.max() ?? 0, privacy: .public)")
-            lastMeterLog = Date()
-        }
         Task { @MainActor [weak self] in
             self?.levels = spectrum
         }
