@@ -7,6 +7,8 @@ final class StatusBarController: NSObject {
     private let preferences = WaveformPreferences()
     private let statusItem = NSStatusBar.system.statusItem(withLength: 38)
     private var peakLevels: [CGFloat] = []
+    private var levelHistory: [[CGFloat]] = []
+    private var delayedLevels: [CGFloat] = []
     private var shouldListen = false
     private var reconnectAttempts = 0
     private var reconnectTask: Task<Void, Never>?
@@ -26,6 +28,7 @@ final class StatusBarController: NSObject {
         capture.$levels
             .receive(on: DispatchQueue.main)
             .sink { [weak self] levels in
+                self?.updateLevelHistory(with: levels)
                 self?.updatePeakLevels(with: levels)
                 self?.updateIcon(levels)
             }
@@ -37,6 +40,8 @@ final class StatusBarController: NSObject {
                 guard let self else { return }
                 if !capture.isCapturing {
                     peakLevels = Array(repeating: 0, count: capture.levels.count)
+                    levelHistory.removeAll(keepingCapacity: true)
+                    delayedLevels = Array(repeating: 0, count: capture.levels.count)
                     updateIcon(capture.levels)
                 }
                 handleCaptureState(state)
@@ -79,10 +84,19 @@ final class StatusBarController: NSObject {
         statusItem.length = preferences.statusItemWidth
         statusItem.button?.image = WaveformRenderer.statusImage(
             levels: levels,
+            delayedLevels: delayedLevels,
             peakLevels: peakLevels,
             preferences: preferences
         )
         statusItem.button?.setAccessibilityLabel("系统音频波形")
+    }
+
+    private func updateLevelHistory(with levels: [CGFloat]) {
+        levelHistory.append(levels)
+        if levelHistory.count > 5 {
+            levelHistory.removeFirst(levelHistory.count - 5)
+        }
+        delayedLevels = levelHistory.first ?? levels
     }
 
     private func updatePeakLevels(with levels: [CGFloat]) {

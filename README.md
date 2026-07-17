@@ -71,7 +71,7 @@ NOTARY_PROFILE="PulseBar-notary" \
 
 ## GitHub 发布
 
-推送 `v1.10.1` 这类与 `VERSION` 一致的标签后，Release workflow 会自动：
+推送 `v1.11.0` 这类与 `VERSION` 一致的标签后，Release workflow 会自动：
 
 1. 运行频谱检查
 2. 构建通用 DMG
